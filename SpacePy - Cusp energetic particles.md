@@ -43,71 +43,165 @@ os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this dire
 
 Background
 ------------------
-This study relates to energetic ions observed in the Earth's magnetospheric cusp and the connection to the tail region. In order to illustrate this, we also will illustrate the use of built-in magnetic field models and their visualization--using a sledghammer to kill a flea.
+This study relates to energetic ions observed in the Earth's magnetospheric cusp and the connection to the tail region. The magnetic field geometry is critical to the physics involved. For those unfamiliar with magnetospheric physics, we illustrate them via SpacePy's support for field models and their visualization--using a sledghammer to kill a flea.
+
+### Getting the model field
+The [getBfield](https://spacepy.github.io/autosummary/spacepy.irbempy.get_Bfield.html#spacepy.irbempy.get_Bfield) function returns a model magnetic field at a given location and time. The positions are given as [Coords](https://spacepy.github.io/autosummary/spacepy.coordinates.Coords.html#spacepy.coordinates.Coords) objects and the times as [Ticktock](https://spacepy.github.io/autosummary/spacepy.time.Ticktock.html#spacepy.time.Ticktock).
+
+`Coords` operates on a 2D array, where the second dimension is the (x, y, z) components. Ultimately we would like to have a 2D grid of the field for a given (x, z) in the y=0 plane.
+
+Most external field models depend on solar wind conditions, which are provided by the [omni](https://spacepy.github.io/omni.html) module.
+
+`getBfield` returns a field in GEO coordinates, so the [convert](https://spacepy.github.io/autosummary/spacepy.coordinates.Coords.html#spacepy.coordinates.Coords.convert) method is used to also express the field itself in GSE.
+
+#### Things to try
+Show the results in different coordinate systems, or look at different magnetic field models. Edit this cell, re-run it, and then run the cells after to see the results.
+
 
 ```python
 import datetime
 
-import matplotlib.colors
-import matplotlib.pyplot
 import numpy
 import spacepy.coordinates
-import spacepy.empiricals
 import spacepy.irbempy
-import spacepy.pybats
-import spacepy.pybats.trace2d
 import spacepy.time
 
-# Coordinates in GSE expressed as an XZ grid (will assume Y=0, noon-midnight plane)
+# Coordinates in GSE Re, expressed as an XZ grid (will assume Y=0, noon-midnight plane)
 x = numpy.arange(-15, 10.1, 0.1)
 z = numpy.arange(-8, 8.1, 0.1)
 # Repeat so that every X component is repeated across every Z, and throw in Y=0
 _ = numpy.meshgrid(x, 0, z)
 # Combine into a single array
 _ = numpy.stack(_, axis=-1)
-# And flatten out to an array of (x, y, z)
+# And flatten out to an array of one (x, y, z) for each position
 location = _.reshape(-1, 3)
-location = spacepy.coordinates.Coords(location, 'GSE', 'car', use_irbem=False)
-# Assume a time 
+# Distance from Earth center, useful later
+r = numpy.sqrt(numpy.sum(location ** 2, axis=1))
+# TRY: SM or GSM coordinates
+system = 'GSE'
+# Define a full coordinate object
+location = spacepy.coordinates.Coords(location, system, 'car', use_irbem=False)
+# Use the same time for all locations
 ticks = spacepy.time.Ticktock([datetime.datetime(2000, 4, 6)] * len(location))
-b = spacepy.irbempy.get_Bfield(ticks, location, extMag='T96')
+# Calculate magnetic field across the domain at this time
+# TRY: Other options: OPDYN, T89, T05
+b = spacepy.irbempy.get_Bfield(ticks, location, extMag='T05')
 b_mag, b_vec = b['Blocal'], b['Bvec']
-b_mag = b_mag.reshape(len(x), len(z))
+# Magnetic field is given in GEO; since this is a simple rotation,
+# can directly convert
 c = spacepy.coordinates.Coords(b_vec, 'GEO', 'car', ticks=ticks, use_irbem=False)
-b_vec = c.convert('GSE', 'car').data.reshape(len(x), len(z), 3)
-b_hat = b_vec / b_mag[..., None]
+b_vec = c.convert(system, 'car').data  # Revert to simple array
+# Magnetic field model is not valid inside the Earth, but keep values
+# near the surface
+b_vec[r < .9, :] = numpy.nan
+# Return to a grid representation
+b_vec = b_vec.reshape(len(x), len(z), 3)
+b_mag = b_mag.reshape(len(x), len(z))
+```
+
+### Plotting field magnitude and direction
+[pcolormesh](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.pcolormesh.html) plots values as colors on a grid. In this case we use it to plot the magnetic field magnitude on a grid of (x, z). By specifying [LogNorm](https://matplotlib.org/stable/api/_as_gen/matplotlib.colors.LogNorm.html) the colorbar is treated as logarithmic.
+
+So we can also see the field direction, we convert the vector field to unit vectors. In addition to the aggregate operation (dividing all of the field vectors by all magnitudes at once) Numpy's [broadcasting](https://numpy.org/doc/stable/user/basics.broadcasting.html) rules allow us to divide every component (x, y, z) by the magnitude without having to repeat the magnitude.
+
+These unit vectors are plotted with [quiver](https://matplotlib.org/stable/api/_as_gen/matplotlib.axes.Axes.quiver.html?highlight=quiver#matplotlib.axes.Axes.quiver), i.e., a collection of arrows. The slice notation `[::4]` is used to select every fourth value (in x and z) so there is room for the arrows.
+
+The spatial grid is treated as `(x, z)`, with z plotted on the y axis. matplotlib treats these as arrays with the first index as the row, and rows plotted on y...thus the frequent [transpose](https://numpy.org/doc/stable/reference/generated/numpy.transpose.html).
+
+#### Things to try
+Change the normalization (range or log/linear) for the color plot; change the density of arrows.
+
+```python
+import matplotlib.colors
+import matplotlib.pyplot
+import spacepy.pybats
+
 fig = matplotlib.pyplot.figure(dpi=150)
 ax = fig.add_subplot(111)
-ax.pcolormesh(x, z, b_mag.transpose(), norm=matplotlib.colors.LogNorm(vmin=10,vmax=1e4))
-ax.set_aspect('equal')
+# TRY: Remove the normalization to have the default linear scale, or change min/max values
+ax.pcolormesh(x, z, b_mag.transpose(), norm=matplotlib.colors.LogNorm(vmin=10, vmax=1e4))
+ax.set_aspect('equal')  # Make circles circular
 spacepy.pybats.add_planet(ax)
-ax.quiver(x[::4], z[::4], b_hat[::4,::4, 0].transpose(), b_hat[::4,::4, 2].transpose(), units='x')
+# Adds another axis (of size 1) to the magnitude, so all components are divided by same magnitude.
+b_hat = b_vec / b_mag[..., None]
+# TRY: Change from every 4th point to more or fewer
+do_every = 4
+ax.quiver(x[::do_every], z[::do_every], b_hat[::do_every, ::do_every, 0].transpose(),
+          b_hat[::do_every, ::do_every, 2].transpose(), units='x')
+```
+### Field lines
+Although the arrow field gives an idea of the field geometry, it's much easier to see the global connectivity by tracing out, and then plotting, the field lines. We use the `trace2d` functionality of [PyBats](https://spacepy.github.io/pybats.html); this simple function underlies the stream tracing support in [Stream](https://spacepy.github.io/autosummary/spacepy.pybats.bats.Stream.html#spacepy.pybats.bats.Stream). Higher-level support for other applications is in design.
+
+The field line trace starts at fixed latitudes, tracing out along the field line from the south pole and out against the field line from the north pole. (This tracing is performed in GSE latitude, not SM, so the hemispheres are not conjugate.) The trace stops when it hits the `nan` in the field, or the edges. Normally the trace is allowed to extend slightly beyond the domain but this sometimes causes numerical issues which are [under investigation](https://github.com/spacepy/spacepy/issues/607), so the trace is explicitly cut off.
+
+#### Things to try
+Change the set of latitudes used (e.g. every 15 degrees).
+
+Try looping over X explicitly with Z fixed at 0 (equatorial plane); note the direction of the trace.
+
+Change the step size.
+
+```python
+import spacepy.pybats.trace2d
+
+# TRY: changing latitude range
 for lat in numpy.arange(-180, 185, 5):
+    # Tracing antiparallel to field from North pole, parallel from South
     direction = 2 * (abs(lat) > 90) - 1
     l = numpy.radians(lat)
     startx = numpy.sin(l)
     startz = numpy.cos(l)
+    # TRY: increasing or decreasing step size (ds)
     tracex, tracez = spacepy.pybats.trace2d.trace2d_rk4(
-        b_hat[..., 0].transpose() * direction,
-        b_hat[..., 2].transpose() * direction,
+        b_vec[..., 0].transpose() * direction,
+        b_vec[..., 2].transpose() * direction,
         startx, startz, x, z, ds=0.1)
-    r = numpy.sqrt(tracex ** 2 + tracez ** 2)
-    hit_earth = numpy.nonzero(r < .95)[0]
-    if len(hit_earth):
-        tracex = tracex[:hit_earth[0]]
-        tracez = tracez[:hit_earth[0]]
+    # Find places where hit edge of domain
     ranged_out = numpy.nonzero((tracex < min(x)) | (tracex > max(x)) | (tracez > max(z)) | (tracez < min(z)))[0]
-    if len(ranged_out):
+    if len(ranged_out):  # And cut the field trace beyond that point
         tracex = tracex[:ranged_out[0]]
         tracez = tracez[:ranged_out[0]]
     ax.plot(tracex, tracez, color='k', marker='', lw=0.75)
-mp_loc = spacepy.empiricals.getMagnetopause(spacepy.time.Ticktock(datetime.datetime(2000, 4, 6)))
-ax.autoscale(enable=False)
-ax.plot(mp_loc[0, :, 0], mp_loc[0, :, 1], color='r', marker='', lw=1)
-
-
+fig
 ```
 
+### Magnetopause
+It's useful to have the magnetopause location to ensure the domain presented is one where the field model is valid.
+
+The [getMagnetopause](https://spacepy.github.io/autosummary/spacepy.empiricals.getMagnetopause.html#spacepy.empiricals.getMagnetopause) function returns a list of magnetopause locations for a particular time. As with [getBfield](https://spacepy.github.io/autosummary/spacepy.irbempy.get_Bfield.html#spacepy.irbempy.get_Bfield), solar wind conditions are taken from the [omni](https://spacepy.github.io/omni.html) module.
+
+The model used is from [Shue et al (1997)](https://doi.org/10.1029/97JA00196).
+
+We take advantage of the rotational symmetry of the Shue model to plot the magnetopause in the XZ plane. For more involved calculations, the standoff distance and flaring parameters are also available.
+
+#### Things to try
+Plot the plasmapause location using [getPlasmaPause](https://spacepy.github.io/autosummary/spacepy.empiricals.getPlasmaPause.html#spacepy.empiricals.getPlasmaPause). Given the XZ slice, this really only makes sense as one location for 00MLT and one for 12MLT
+
 ```python
+import spacepy.empiricals
+
+# Provided in GSE directly
+mp_loc = spacepy.empiricals.getMagnetopause(spacepy.time.Ticktock(datetime.datetime(2000, 4, 6)))
+ax.autoscale(enable=False)  # Much of the MP is outside of domain, so do not change range of plot
+# Taking advantage of the fact that the Shue model is rotationally symmetric, treat the
+# Y component of the mpause location as the Z component
+ax.plot(mp_loc[0, :, 0], mp_loc[0, :, 1], color='r', marker='', lw=1)
+fig
+```
+
+### Labels
+Certain features are reasonably visible here: the compression of the field on the dayside, the stretched nature of the tail, and the cusps where more direct solar wind entry is possible. But labeling these features would help them stand out. Many [annotation](https://matplotlib.org/stable/gallery/text_labels_and_annotations/annotation_demo.html) options are available.
+
+#### Things to try
+Change the color of the annotation box.
+
+Put the annotation text in a different place with an arrow pointing to it.
+
+
+
+```python
+ax.annotate('Tail', xy=(-11, 0), ha='center', bbox=dict(boxstyle="round", fc='w', ec='k'))
+ax.annotate('Cusp', xy=(6,6), ha='center', bbox=dict(boxstyle="round", fc='w', ec='k'))
+fig
 
 ```
