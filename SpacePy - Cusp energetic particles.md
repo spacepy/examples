@@ -205,3 +205,85 @@ ax.annotate('Cusp', xy=(6,6), ha='center', bbox=dict(boxstyle="round", fc='w', e
 fig
 
 ```
+
+### Cleanup
+Although this has fine output, temporary data arrays are left hanging around. This is a good example of why not to do everything as global variables, as local variables are automatically garbage collected when a function ends. Globals aren't cleaned up until Python exits. The VMs for this summer school are fairly small, so we're going to explicitly clean up some of the bigger arrays to save us all trouble.
+
+We'll similarly do cleanup of temporaries throughout the rest of this notebook.
+
+Note that, for example, the `tracex` and `tracez` variables are continually redefined when looping over field lines--each instance is automatically garbage collected when redefined, so there's no need to explicitly delete them.
+
+```python
+del b_vec, b_hat, b_mag, x, z, tracex, tracez
+```
+
+### Science question
+This figure provides context for the science question: what are the potential sources and effects of energetic particles observed in the cusp, particularly in the deep magnetic depressions associated with the entry of solar wind plasma? Three mechanisms were proposed:
+
+ 1. Local acceleration of ions in the cusp, potentially resulting in escape and contribution to ring current populations.
+ 2. Acceleration of ions in the tail during substorm dipolarizations followed by drift to the dayside.
+ 3. Acceleration of solar wind ions at the quasi-parallel bow shock.
+
+To test these mechanisms, particularly the first 2, [Niehof et al., (2012)](https://doi.org/10.5194/angeo-30-1633-2012) used a list of cusp crossings and associated energetic particle observations from an earlier study ([Niehof et al., 2010](https://doi.org/10.1029/2009JA014827)).
+
+<!-- #region -->
+Preparing data sets
+----------------------------
+
+### Cusp-crossing data
+The cusp pass data from the Polar spacecraft in Niehof et al. (2010) was calculated in IDL and saved as an IDL saveset. This provides a good example of moving from IDL to Python. An IDL saveset can easily be read into a Python dictionary with [scipy.io](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.readsav.html#scipy.io.readsav). This saveset has been included in the `tutorial_data` directory.
+
+The data were saved as a series of timestamps (as year, month, day, and minute of day) and conditional arrays for whether Polar was in the cusp or observed energetic particles.
+
+This illustrates two different ways to deal with applying a function across elements of multiple numpy arrays: one is to use a list comprehension, and one is to use [vectorize](https://numpy.org/doc/stable/reference/generated/numpy.vectorize.html#numpy.vectorize), which will call the function once for each element of the inputs and return an array. `vectorize` does not parallelize, but it's still usually faster than a for loop in Python (it does much of the looping in C).
+
+#### Things to try
+Convert the times directly to seconds since 1996 with a single vectorized function, instead of in two steps.
+
+<details>
+    <summary>(Click for one answer)</summary>
+
+<p>
+
+```python
+to_seconds_alt = numpy.vectorize(lambda y, m, d, minute: (datetime.datetime(y, m, d)
+    - datetime.datetime(1996, 1, 1)).total_seconds() + minute * 60)
+po_seconds = to_seconds_alt(po_data['yyyy'], po_data['mm'], po_data['dd'], po_data['minute'])
+```
+
+</p>
+</details>
+
+<!-- #endregion -->
+
+```python
+import scipy.io
+po_data = scipy.io.readsav(os.path.join(tutorial_data, 'all_passes.idl'))
+# Whether in cusp/not, or energetic particles present/not, was saved as 0/1
+po_cusp = numpy.require(po_data['cusp'], dtype=bool)
+po_cep = numpy.require(po_data['cep'], dtype=bool)
+# Times are stored as year, month, day, and minutes since start of day
+po_times = numpy.array([
+    datetime.datetime(po_data['yyyy'][i], po_data['mm'][i], po_data['dd'][i])
+    + datetime.timedelta(minutes=int(po_data['minute'][i]))
+    for i in range(len(po_data['yyyy']))])
+# To simplify math everything was done as total seconds since 1996-1-1
+to_seconds = numpy.vectorize(lambda dt: (dt - datetime.datetime(1996, 1, 1)).total_seconds())
+po_times = to_seconds(po_times)
+```
+
+Because of the analysis approach we'll be taking, our times and conditions need to be converted to simple sequences of times: one array of times when Polar was in the cusp, and one of the subset when it was in the cusp and observing energetic particle data.
+
+This is simple with numpy's [boolean indexing](https://numpy.org/doc/stable/user/basics.indexing.html#boolean-array-indexing): indexing an array with a boolean array of the same size returns the values where the index array is `True`.
+
+When writing this paper, these data sets were not built up over a single session. Intermediate steps were saved as [pickles](https://docs.python.org/3/library/pickle.html) using [savepickle](https://spacepy.github.io/autosummary/spacepy.toolbox.savepickle.html#spacepy.toolbox.savepickle). Pickles are very convenient but not necessarily portable. Spacepy's [toHDF5](https://spacepy.github.io/autosummary/spacepy.datamodel.toHDF5.html#spacepy.datamodel.toHDF5) method supports saving in the standard HDF5 format.
+
+#### Things to try
+Saving and loading some of the data with ``pickle`` or ``toHDF5`` (which requires placing data into SpacePy's datamodel).
+
+```python
+# Simple array of times, as seconds, when Polar was in the cusp, and observed CEPs
+cusp_times = po_times[po_cusp]
+cep_times = po_times[po_cep]
+del po_data, po_times
+```
