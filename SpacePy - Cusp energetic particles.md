@@ -369,3 +369,37 @@ matplotlib.pyplot.plot(dst_times[:28800], dst[:28800])
 matplotlib.pyplot.plot(dst_times[:28800], dst_star[:28800])
 # TRY: show the difference
 ```
+
+We won't go into the details of storm identification from Dst; we used an existing list of approximate storm minima (<-30nT) during this time as candidates, and identified onset times by eye (independently by two different people, reconciled after.) The onset times are provided in a pickle and [loadpickle](https://spacepy.github.io/autosummary/spacepy.toolbox.loadpickle.html#spacepy.toolbox.loadpickle) provides a convenient function for loading (including compression support).
+
+The SpacePy [EventClicker](https://spacepy.github.io/autosummary/spacepy.plot.utils.EventClicker.html#spacepy.plot.utils.EventClicker) resulted from this work and is very useful for semi-automated feature identification.
+
+Our next plot is the first one that actually went in the paper, so we're going to prompt matplotlib to [render the labels in LaTeX](https://matplotlib.org/stable/tutorials/text/usetex.html). This means the ability to use LaTeX formatting (like superscripts and subscripts), but also that the text in the plot matches that in the manuscript (if the manuscript is in LaTeX and figures are in EPS). Obviously this requires LaTex (and [particular packages for unicode fonts](https://github.com/matplotlib/matplotlib/issues/16911)) so you can just skip the following cell if that's too much.
+
+```python
+matplotlib.rcParams['axes.unicode_minus'] = False
+matplotlib.rcParams['text.usetex']= True
+matplotlib.rcParams['ps.usedistiller'] = 'xpdf'
+matplotlib.rcParams['font.family'] = 'serif'
+matplotlib.rcParams['font.size'] = 16
+```
+
+To characterize the population of storms identified, we use the [SeaPy](https://spacepy.github.io/seapy.html) for superposed epoch analysis, plotting the time history of Dst* relative to each onset.
+
+Regarding the specific parameters: we have 1-minute resolution data and want the plot to span two days on each side of onset. The plot then specifies the interquartile patch color and that it not be transparent. The black line is the median Dst* value; the red, the mean.
+
+The minimum is somewhat obscured by storm-to-storm variability in the length of the main phase; the plot is not normalized.
+
+Although the onsets are all that are used in the final analysis, the superposed epoch plot gives confidence in the storm identification.
+
+```python
+import spacepy.seapy
+
+onsets = spacepy.toolbox.loadpickle(os.path.join(tutorial_data, 'storm_onsets.pkl'))
+superposed = spacepy.seapy.Sea(dst_star, dst_times, onsets,
+                               delta=datetime.timedelta(minutes=1),
+                               window=datetime.timedelta(days=2))
+superposed.sea()
+superposed.plot(xquan='Time since onset (days)', yquan='USGS Dst* (nT)',
+                transparent=False, color='#ABABFF', epochline=True)
+```
