@@ -377,11 +377,10 @@ The SpacePy [EventClicker](https://spacepy.github.io/autosummary/spacepy.plot.ut
 Our next plot is the first one that actually went in the paper, so we're going to prompt matplotlib to [render the labels in LaTeX](https://matplotlib.org/stable/tutorials/text/usetex.html). This means the ability to use LaTeX formatting (like superscripts and subscripts), but also that the text in the plot matches that in the manuscript (if the manuscript is in LaTeX and figures are in EPS). Obviously this requires LaTex (and [particular packages for unicode fonts](https://github.com/matplotlib/matplotlib/issues/16911)) so you can just skip the following cell if that's too much.
 
 ```python
-matplotlib.rcParams['axes.unicode_minus'] = False
-matplotlib.rcParams['text.usetex']= True
-matplotlib.rcParams['ps.usedistiller'] = 'xpdf'
-matplotlib.rcParams['font.family'] = 'serif'
-matplotlib.rcParams['font.size'] = 16
+#matplotlib.rcParams['text.usetex']= True
+#matplotlib.rcParams['ps.usedistiller'] = 'xpdf'
+#matplotlib.rcParams['font.family'] = 'serif'
+#matplotlib.rcParams['font.size'] = 16
 ```
 
 To characterize the population of storms identified, we use the [SeaPy](https://spacepy.github.io/seapy.html) for superposed epoch analysis, plotting the time history of Dst* relative to each onset.
@@ -402,4 +401,28 @@ superposed = spacepy.seapy.Sea(dst_star, dst_times, onsets,
 superposed.sea()
 superposed.plot(xquan='Time since onset (days)', yquan='USGS Dst* (nT)',
                 transparent=False, color='#ABABFF', epochline=True)
+```
+
+### Substorm onsets
+One characteristic of a substorm onset is a dipolarization in the tail, where the "stretched" field lines move Earthward. This results in both betatron acceleration and second-order Fermi acceleration. The dipolarization can be observed by a change in the elevation angle of the magnetic field observed at GOES. This was, again, done in IDL before the previous study, and the data saved in IDL.
+
+The data are stored as a time and the time since last substorm, from which a zero indicates currently in a dipolarization event. So first we extract all the times within an event, and then find only those times which start an event.
+
+```python
+substorm_data = scipy.io.readsav(os.path.join(tutorial_data, 'substorms.idl'))
+# Get all times that are in dipolarization
+substorm_times = numpy.array([
+    datetime.datetime(substorm_data['goes_yyyy'][i], substorm_data['goes_mm'][i], substorm_data['goes_dd'][i])
+    + datetime.timedelta(minutes=int(substorm_data['goes_min'][i]))
+    for i in range(len(substorm_data['goes_yyyy']))
+    if not substorm_data['last_substorm'][i]
+])
+# Convert to seconds since 1996-1-1
+substorm_times = to_seconds(substorm_times)
+# ith element is True if times[i+1] - times[i] > 60
+idx = numpy.diff(substorm_times) > 60
+# Also keep first one (obviously nothing before)
+idx = numpy.concatenate(([True], idx))
+print(numpy.sum(idx))  # number of dipolarizations
+substorm_times = substorm_times[idx]
 ```
