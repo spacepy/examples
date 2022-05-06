@@ -218,7 +218,7 @@ del b_vec, b_hat, b_mag, x, z, tracex, tracez
 ```
 
 ### Science question
-This figure provides context for the science question: what are the potential sources and effects of energetic particles observed in the cusp, particularly in the deep magnetic depressions associated with the entry of solar wind plasma? Three mechanisms were proposed:
+This figure provides context for the science question: what are the potential sources and effects of energetic particles observed in the cusp (Cusp Energetic Particles, CEPs), particularly in the deep magnetic depressions associated with the entry of solar wind plasma? Three mechanisms were proposed:
 
  1. Local acceleration of ions in the cusp, potentially resulting in escape and contribution to ring current populations.
  2. Acceleration of ions in the tail during substorm dipolarizations followed by drift to the dayside.
@@ -233,7 +233,7 @@ Preparing data sets
 ### Cusp-crossing data
 The cusp pass data from the Polar spacecraft in Niehof et al. (2010) was calculated in IDL and saved as an IDL saveset. This provides a good example of moving from IDL to Python. An IDL saveset can easily be read into a Python dictionary with [scipy.io](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.readsav.html#scipy.io.readsav). This saveset has been included in the `tutorial_data` directory.
 
-The data were saved as a series of timestamps (as year, month, day, and minute of day) and conditional arrays for whether Polar was in the cusp or observed energetic particles.
+The data were saved as a series of timestamps (as year, month, day, and minute of day) and conditional arrays for whether Polar was in the cusp or observed energetic particles. Most of the analysis was done using times as seconds since 1996-1-1. This isn't ideal--it's better to stick with a standard representation such as TAI throughout, but at least it is fairly easy to do conversions, so this tutorial can demonstrate the conversions.
 
 This illustrates two different ways to deal with applying a function across elements of multiple numpy arrays: one is to use a list comprehension, and one is to use [vectorize](https://numpy.org/doc/stable/reference/generated/numpy.vectorize.html#numpy.vectorize), which will call the function once for each element of the inputs and return an array. `vectorize` does not parallelize, but it's still usually faster than a for loop in Python (it does much of the looping in C).
 
@@ -257,7 +257,14 @@ po_seconds = to_seconds_alt(po_data['yyyy'], po_data['mm'], po_data['dd'], po_da
 <!-- #endregion -->
 
 ```python
+
+```
+
+```python
+import os.path
+
 import scipy.io
+
 po_data = scipy.io.readsav(os.path.join(tutorial_data, 'all_passes.idl'))
 # Whether in cusp/not, or energetic particles present/not, was saved as 0/1
 po_cusp = numpy.require(po_data['cusp'], dtype=bool)
@@ -286,4 +293,79 @@ Saving and loading some of the data with ``pickle`` or ``toHDF5`` (which require
 cusp_times = po_times[po_cusp]
 cep_times = po_times[po_cep]
 del po_data, po_times
+```
+
+### Geomagnetic storms
+Intensifications of the ring current are associated with changes in the magnetic field measured at Earth's surface, known as geomagnetic storms (one of the earliest phenomena known to space physics). Thus, if CEPs are a ring current driver, we are interested in any potential association with storms.
+
+The canonical measure of the surface field, taking out effects of location and instrument, is known as Dst. This is calculated on an hourly cadence by the World Data Center in Kyoto. [Gannon and Love (2011)](https://doi.org/10.1016/j.jastp.2010.02.013) extended this approach to provide a comparable one-minute index, allowing for more precise identification of storm onset and minima. A CDF conversion of this dataset is provided with this tutorial data.
+
+[concatCDF](https://spacepy.github.io/autosummary/spacepy.pycdf.concatCDF.html#spacepy.pycdf.concatCDF) provides an easy way to read the same data from a series of CDFs. Two points of detail:
+
+  * The CDFs are opened in a list comprehension, and automatically closed when it goes out of scope.
+  * The file listings are explicitly sorted to ensure they are in order. See [Neupane et al. (2019)](https://doi.org/10.1021/acs.orglett.9b03216).
+
+```python
+import glob
+
+import spacepy.pycdf
+
+files = sorted(glob.glob(os.path.join(tutorial_data, 'hr_dst', 'ngp_dst_k0*_v00.cdf')))
+dstdata = spacepy.pycdf.concatCDF([spacepy.pycdf.CDF(f) for f in files],
+                           ['Dst', 'Epoch'])
+dst_times, dst = dstdata['Epoch'], dstdata['Dst']
+del dstdata
+```
+
+A quick plot of a few weeks' data shows a moderate storm.
+
+```python
+matplotlib.pyplot.plot(dst_times[:28800], dst[:28800])
+```
+
+<!-- #region -->
+In addition to ring current effects, Dst can be affected by magnetosphere compression due to changes in solar wind dynamic pressure. This can obscure the details of storm onset, so a pressure-corrected Dst* index is often used [getDststar](https://spacepy.github.io/autosummary/spacepy.empiricals.getDststar.html#spacepy.empiricals.getDststar) will return Dst* for given times directly from the hourly OMNI database; however, in this case we are using a one-minute Dst, so wish to use a higher resolution pressure correction. `getDststar` also applies correction from inputs of uncorrected Dst and solar wind dynamic pressure; we obtain the latter from the 5 minute high resolution OMNI dataset.
+
+[numpy.interp](https://numpy.org/doc/stable/reference/generated/numpy.interp.html) will nicely interpolate for us, but it has a few limitations: it won't interpolate across fill, and it doesn't handle datetimes. So we use [Ticktock](https://spacepy.github.io/autosummary/spacepy.time.Ticktock.html#spacepy.time.Ticktock) to convert to TAI.
+
+#### Things to try
+Interpolate with a different time representation (e.g. MJD).
+
+Interpolate using [date2num](https://matplotlib.org/stable/api/dates_api.html#matplotlib.dates.date2num). This can be useful for quick throwaways, but provides less flexibility.
+<details>
+    <summary>(Click for one answer)</summary>
+
+<p>
+
+```python
+import matplotlib.dates
+pdyn = numpy.interp(matplotlib.dates.date2num(dst_times),
+                    matplotlib.dates.date2num(hrodata['Epoch'][hrogood]),
+                    hrodata['Pressure'][hrogood])
+```
+
+</p>
+</details>
+
+<!-- #endregion -->
+
+```python
+# This pattern should be familiar from reading the USGS Dst above
+hro_files = sorted(glob.glob(os.path.join('spacepy_tutorial', 'hro', '*', 'omni_hro_5min_*01_v01.cdf')))
+hrodata = spacepy.pycdf.concatCDF([spacepy.pycdf.CDF(f) for f in hro_files], ['Pressure', 'Epoch'])
+# Fill is 99.99 for this data set
+hrogood = hrodata['Pressure'] < 50.
+# TRY: interpolate using a different timebase
+pdyn = numpy.interp(spacepy.time.Ticktock(dst_times).TAI,
+                    spacepy.time.Ticktock(hrodata['Epoch'][hrogood]).TAI,
+                    hrodata['Pressure'][hrogood])
+dst_star = spacepy.empiricals.getDststar({'Pdyn': pdyn, 'Dst': dst}, model='OBrien')
+del hrodata, pdyn, hrogood
+```
+
+```python
+# View original and corrected Dst
+matplotlib.pyplot.plot(dst_times[:28800], dst[:28800])
+matplotlib.pyplot.plot(dst_times[:28800], dst_star[:28800])
+# TRY: show the difference
 ```
