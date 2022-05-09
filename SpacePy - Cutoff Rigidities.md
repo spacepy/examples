@@ -12,7 +12,22 @@ jupyter:
     name: python3
 ---
 
-# Epoch-Dependent Rigidity Cutoff
+# SpacePy Tutorial -- Epoch-Dependent Rigidity Cutoff
+
+### Background
+Earth's magnetic field provides protection from high energy charged particles originating outside the magnetosphere, such as solar energetic particles (SEPs) and galactic cosmic rays (GCRs). Properties of both the particle (mass, energy, charge) and the magnetic field (strength, topology)  will determine how deep into the magnetosphere a particle can penetrate.
+
+This example is largely inspired by ([Smart and Shea, 1993](https://adsabs.harvard.edu/full/1993ICRC....3..781S)). It will also present the energetic charged particle data from the Global Positioning System constellation ([Morley et al., 2017](https://doi.org/10.1002/2017SW001604)).
+
+It illustrates several areas of functionality in SpacePy and the broader scientific Python ecosystem, as well as some approaches less widely used in academic programming, including:
+
+  - Simple file retrieval from the web
+  - Working with JSON-headed ASCII [spacepy.datamodel](https://spacepy.github.io/datamodel.html)
+  - Time-system conversion [spacepy.time](https://spacepy.github.io/time.html) and [astropy.time](https://docs.astropy.org/en/stable/time/index.html)
+  - Binning 1D data into 2D [spacepy.plot.Spectrogram](https://spacepy.github.io/autosummary/spacepy.plot.spectrogram.html)
+  - Classes and inheritance
+
+### Setup
 
 ```python
 import glob
@@ -31,7 +46,9 @@ import spacepy.time as spt
 splot.style('default')
 ```
 
-To illustrate what rigidity is and does, we'll start with some energetic charged particle data from the GPS constellation.
+### Illustrating geomagnetic shielding using GPS particle data
+
+To illustrate what rigidity is and does, we'll start with some energetic charged particle data from the GPS constellation. If you've already downloaded this data, just skip the cell.
 
 ```python
 satnums = [64, 65, 66, 68, 69, 71]
@@ -208,9 +225,7 @@ As you can see, throughout the SEP interval the fluxes at higher L remain elevat
 While the Störmer model takes the direction into account, we'll just use the vertical approximation for our calculations to save on code. For a full implementation see the SHIELDS-PTM code.
 
 
-First, import the packages we'll be using. We'll be using the `IGRF` module in SpacePy to evaulate Earth's dipole moment. Currently this isn't a fully-featured IGRF implemenation - it supports the coordinate system transformations and so we can get the dipole axis and the magnetic moment.
-
-First we need to make an IGRF object, then initialize it for a specific time.
+First, import the packages we'll be using. We'll be using the `IGRF` module in SpacePy to evaulate Earth's dipole moment. Currently this isn't a fully-featured IGRF implemenation - it supports the coordinate system transformations and so we can get the dipole axis and the magnetic moment. First we need to make an IGRF object, then initialize it for a specific time.
 ##### Before you run the next cell, any guesses on roughly what the magnetic moment is?
 
 ```python
@@ -313,23 +328,23 @@ So how does this work? The `classmethod` means that we expect to use the method 
 
 ```python
 myproton = Proton.fromRigidity(0.5)  # Half a GV
+print(myproton.energy)
 ```
 
-```python
-myproton.energy
-```
+##### Exercises: What would classes for electrons and O<sup>2+</sup> look like?
+
 
 Now we'll instatiate an IGRF object and set up an array of times that we want to evaluate the magnetic moment at.
 
-IGRF13 currently covers the period 1900 to 2025.
+IGRF13 currently covers the period 1900 to 2025, so we can update the results presented by Smart and Shea to use one consistent model from 1900 through 2025. In their paper, pre-1945 was taken from work by Akasofu and Chapman (1972) and the last year shown was 1990. As the IGRF can be slow to evaluate and the magnetic moment veries slowly, we'll do one data point every 30 days. This give us approximately 1500 points sampled over the data range, compared to the 16 used by Smart and Shea.
 
 ```python
 magmod = igrf.IGRF()
-
 epochs = spt.tickrange('1900-1-1', '2025-1-1', 30)
+print('Number of epochs is {}'.format(len(epochs)))
 ```
 
-The next step is to loop over the times and, for each, calculate the moment of the centered dipole.
+The next step is to loop over the times and, for each, calculate the moment of the centered dipole. This might take a couple of seconds as evaluating IGRF is relatively computationally expensive.
 
 ```python
 moments = np.empty(len(epochs))
