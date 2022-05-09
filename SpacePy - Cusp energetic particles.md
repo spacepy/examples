@@ -257,10 +257,6 @@ po_seconds = to_seconds_alt(po_data['yyyy'], po_data['mm'], po_data['dd'], po_da
 <!-- #endregion -->
 
 ```python
-
-```
-
-```python
 import os.path
 
 import scipy.io
@@ -426,3 +422,65 @@ idx = numpy.concatenate(([True], idx))
 print(numpy.sum(idx))  # number of dipolarizations
 substorm_times = substorm_times[idx]
 ```
+
+Association Analysis
+------------------------------
+We now have four lists of times: times when Polar was in the cusp, when Polar observed CEPs, dipolarization onsets, and storm onsets. We wish to know if there are any associations between these events which may imply causality, e.g., are energetic particles more likely to be observed after substorm onsets? This technique is describe in detail in [Niehof and Morley, 2012](https://doi.org/10.2172/1035497) and implemented in the [PoPPy module](https://spacepy.github.io/poppy.html).
+
+The simplest question might be, for instance, how many CEP observations happen at the same time as a dipolarization event? Obviously this makes more sense in terms of, say a window, e.g. how many CEP observations happen within half an hour of a dipolarization onset? Finally, we might expect there to be some time lag in one direction or another, so the question becomes, for each of a set of times, how many CEP observations happen within a given window of that time away from a dipolarization onset?
+
+Depending on its energy, an ion would take approximately 15-120 minutes to gradient-curvature drift from the tail to the dayside. We thus choose 30 minutes as the window half-size for association.
+
+
+```python
+import spacepy.poppy
+
+# Calculate for +/-5 days at 5min resolution, doing everything in seconds
+lags = list(range(-5 * 60 * 60 * 24, 5 * 60 * 60 * 24 + 1, 5 * 60))
+pop = spacepy.poppy.PPro(substorm_times, cep_times, lags=lags, winhalf=30 * 60.)
+pop.assoc()
+# xscale: convert the seconds in the data to hours on the axis
+pop.plot(norm=False, xlabel='Time lag (hours)', ylabel='Association number', xscale=3600.)
+```
+
+At very large lags, the expectation is that any association would be broken. The association number in this "asymptotic" region gives an indication of the level of chance association. Any greater than this number suggests a positive association. But it's obvious that there's a lot of variability even in the asymptotic region. The question is which of these are significant.
+
+Confidence intervals on the association number can be calculated using the bootstrap, which repeatedly resamples the series of individual associations (with replacement) to estimate population statistics from the sample. This can be very computationally expensive, as it essentially involves repeating the association analysis thousands of times. This is performed in C and multithreaded for speed. For this tutorial, we use a smaller number of resamplings for speed, which may slightly reduce the accuracy of the confidence interval.
+
+```python
+# Build 95% confidence interval with 200 resamplings
+pop.aa_ci(95, n_boots=200)
+pop.plot(norm=False, xlabel='Time lag (hours)', ylabel='Association number', xscale=3600.)
+```
+
+This looks like a significant association of CEPs with substorm onsets, with the CEPs potentially slightly leading. But the association here is with energetic particles *observed in the cusp*, and it wouldn't be surprising to have geomagnetic reconfigurations affecting the likelihood of Polar observing the cusp. So let's check that possibility.
+
+```python
+pop_cusp = spacepy.poppy.PPro(substorm_times, cusp_times, lags=lags, winhalf=30 * 60.)
+pop_cusp.assoc()
+pop_cusp.aa_ci(95, n_boots=200)
+pop_cusp.plot(norm=False, xlabel='Time lag (hours)', ylabel='Association number', xscale=3600.)
+```
+
+There are definitely some similarities. So the point of interest is whether energetic particles are *more* associated with dipolarizations than the cusp. That is the purpose of the [plot_two_ppro](https://spacepy.github.io/autosummary/spacepy.poppy.plot_two_ppro.html#spacepy.poppy.plot_two_ppro) function, which will plot two `PPro` objects normalized to one of them, to look for non-overlapping confidence intervals.
+
+```python
+spacepy.poppy.plot_two_ppro(pop, pop_cusp, norm=True, xscale=3600, dpi=150)
+```
+
+Barely visible is the slight increase in association (about 96% confidence) around lags of 3-3.5 hours, i.e., with the CEP observations occurring about 3 hours after the dipolarization. This is supportive of the hypothesis that cusp energetic particles are accelerated in substorms and drift to the dayside. There is no significant association with CEPs *leading* the dipolarizations.
+
+We can perform a similar analysis for storm onsets.
+
+```python
+storm_times = to_seconds(onsets)
+pop = spacepy.poppy.PPro(storm_times, cep_times, lags=lags, winhalf=30 * 60.)
+pop.assoc()
+pop.aa_ci(95, n_boots=200)
+pop_cusp = spacepy.poppy.PPro(storm_times, cusp_times, lags=lags, winhalf=30 * 60.)
+pop_cusp.assoc()
+pop_cusp.aa_ci(95, n_boots=200)
+spacepy.poppy.plot_two_ppro(pop, pop_cusp, norm=True, xscale=3600, dpi=150)
+```
+
+This shows pretty clearly that there is no association between CEP observations and geomagnetic storm onsets, suggesting that CEPs cannot be a major and direct driver of the ring current.
