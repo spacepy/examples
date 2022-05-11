@@ -36,7 +36,8 @@ However, for the purposes of this summer school, we have provided a shared direc
 So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to [point SpacePy at this directory](https://spacepy.github.io/configuration.html) before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this.
 
 ```python
-tutorial_data = 'spacepy_tutorial'  # All data for this summer school, will be used throughout
+#tutorial_data = 'spacepy_tutorial'
+tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for this summer school, will be used throughout
 import os
 os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
 ```
@@ -303,7 +304,7 @@ The canonical measure of the surface field, taking out effects of location and i
 
 ```python
 import glob
-
+os.environ['CDF_LIB'] = tutorial_data
 import spacepy.pycdf
 
 files = sorted(glob.glob(os.path.join(tutorial_data, 'hr_dst', 'ngp_dst_k0*_v00.cdf')))
