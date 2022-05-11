@@ -348,7 +348,7 @@ pdyn = numpy.interp(matplotlib.dates.date2num(dst_times),
 
 ```python
 # This pattern should be familiar from reading the USGS Dst above
-hro_files = sorted(glob.glob(os.path.join('spacepy_tutorial', 'hro', '*', 'omni_hro_5min_*01_v01.cdf')))
+hro_files = sorted(glob.glob(os.path.join(tutorial_data, 'hro', '*', 'omni_hro_5min_*01_v01.cdf')))
 hrodata = spacepy.pycdf.concatCDF([spacepy.pycdf.CDF(f) for f in hro_files], ['Pressure', 'Epoch'])
 # Fill is 99.99 for this data set
 hrogood = hrodata['Pressure'] < 50.
