@@ -17,18 +17,51 @@ jupyter:
 ### Background
 Earth's magnetic field provides protection from high energy charged particles originating outside the magnetosphere, such as solar energetic particles (SEPs) and galactic cosmic rays (GCRs). Properties of both the particle (mass, energy, charge) and the magnetic field (strength, topology)  will determine how deep into the magnetosphere a particle can penetrate.
 
-This example is largely inspired by ([Smart and Shea, 1993](https://adsabs.harvard.edu/full/1993ICRC....3..781S)). It will also present the energetic charged particle data from the Global Positioning System constellation ([Morley et al., 2017](https://doi.org/10.1002/2017SW001604)).
+This example is largely inspired by ([Smart and Shea, 1993](https://adsabs.harvard.edu/full/1993ICRC....3..781S)), especially their Figure 2. It will also present the energetic charged particle data from the Global Positioning System constellation ([Morley et al., 2017](https://doi.org/10.1002/2017SW001604)).
 
 It illustrates several areas of functionality in SpacePy and the broader scientific Python ecosystem, as well as some approaches less widely used in academic programming, including:
 
   - Simple file retrieval from the web
-  - Working with JSON-headed ASCII [spacepy.datamodel](https://spacepy.github.io/datamodel.html)
-  - Time-system conversion [spacepy.time](https://spacepy.github.io/time.html) and [astropy.time](https://docs.astropy.org/en/stable/time/index.html)
-  - Binning 1D data into 2D [spacepy.plot.Spectrogram](https://spacepy.github.io/autosummary/spacepy.plot.spectrogram.html)
+  - Working with JSON-headed ASCII ([spacepy.datamodel](https://spacepy.github.io/datamodel.html))
+  - Time-system conversion ([spacepy.time](https://spacepy.github.io/time.html) and [astropy.time](https://docs.astropy.org/en/stable/time/index.html))
+  - Binning 1D data into 2D with [spacepy.plot.Spectrogram](https://spacepy.github.io/autosummary/spacepy.plot.spectrogram.html)
   - The classic "traffic light" plot using [spacepy.plot.levelPlot](https://spacepy.github.io/autosummary/spacepy.plot.levelPlot.html#spacepy.plot.levelPlot)
   - Classes and inheritance
 
 ### Setup
+<<<<<<< Updated upstream
+=======
+This tutorial uses geomagnetic index and leapsecond data that SpacePy normally maintains on a per-user basis. (To download this data on your own installation of SpacePy, use toolbox.update()).
+
+For the Python in Heliophysics summer school, we have provided a shared directory with the normal SpacePy configuration and managed data. There are also other data files specific to the summer school so that data downloads don't need to be run. So we use a single directory containing all the data for this tutorial and also the .spacepy directory (normally in a user's home directory). We use an environment variable to point SpacePy at this directory before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this, and if you're not using this notebook in the summer school then skip the next cell and run the code to download the data.
+
+```python
+import os
+tutorial_data = '.'  # If not using HelioCloud, uncomment next two lines
+#tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for Python in Heliophysics summer school
+#os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
+
+import numpy as np
+import matplotlib.axes
+
+# Patch matplotlib's Axes class.
+# This restores the old API that matplotlib removed in version 3.5
+# The next release of spacepy works with the new API.
+# If you're using an older version of matplotlib, this isn't necessary, but won't hurt.
+class A(matplotlib.axes.Axes):
+    def pcolormesh(self, *args, **kwargs):
+        if 'norm' in kwargs and ('vmax' in kwargs or 'vmin' in kwargs):
+            import matplotlib.colors
+            if isinstance(kwargs['norm'], matplotlib.colors.LogNorm):
+                kwargs['norm'] = matplotlib.colors.LogNorm(
+                    vmin=kwargs.get('vmin', None),
+                    vmax=kwargs.get('vmax', None))
+                for k in ('vmin', 'vmax'):
+                    del kwargs[k]
+        return super(A, self).pcolormesh(*args, **kwargs)
+matplotlib.axes.Axes = A
+```
+>>>>>>> Stashed changes
 
 ```python
 import glob
@@ -139,6 +172,23 @@ If you are using astropy or sunpy then you may want the time as an `astropy.time
 ```python
 gpastro = ticks_from_gps(gps['year'], gps['decimal_day'], use_astropy=True)
 print(gpastro.iso[0], type(gpastro))
+<<<<<<< Updated upstream
+=======
+# For reasons about the become clear, we'll also print the "scale"
+print('Our astropy Time object uses the {} scale'.format(gpastro.scale))
+```
+
+<!-- #region -->
+<b>This does not agree with our previous answers?! Why?</b>
+<details>
+    <summary><b>(Click for answer)</b></summary>
+
+GPS time is basically a fixed offset from TAI. So when you tell astropy that the format is "gps" it makes a `Time` object on the TAI scale (if you're really interested, you can [read an issue on astropy's github](https://github.com/astropy/astropy/pull/1879) that discusses this). Each are the number of seconds from a zero epoch, without leap seconds. GPS has a later epoch and so is offset by the total number of leap seconds in January 1980. So the "iso" representation here is of TAI represented as an ISO-formatted date and time, and not of either GPS _or_ UTC.
+    
+We can change the scale to UTC and re-run the cell to check that it agrres with our calculated UTC time...
+```python
+print(gpastro.utc.iso[0], type(gpastro))
+>>>>>>> Stashed changes
 ```
 
 Note that you can make a `spacepy.time.Ticktock` directly from an `astropy.time.Time` by specifying the `APT` datatype on instantiation. For convenience moving forward, let's add this to our GPS data collection. We can also verify that we still have the same times...
@@ -325,7 +375,7 @@ R<sub>C</sub> = M / L<sup>2</sup>[1 + (1 - sin ε sin ζ cos<sup>3</sup> λ)<sup
     
 where M is the dipole moment, L is the dipole L (a dimensionless "distance" parameter that describes the field line), λ is the magnetic latitude, and ε and ζ are angles describing the arrival direction of the particle.
 
-While the Störmer model takes the direction into account, we'll just use the vertical approximation for our calculations to save on code. For a full implementation see the SHIELDS-PTM code.
+While the Störmer model takes the direction into account, we'll just use the vertical approximation for our calculations to save on code. A lot of sources will replace M with 4R<sub>0</sub>, where R<sub>0</sub> is the vertical cutoff rigidity at L-1. For a full implementation [see the SHIELDS-PTM code](https://github.com/lanl/SHIELDS-PTM).
 <!-- #endregion -->
 
 We'll be using the `IGRF` module in SpacePy to evaluate Earth's dipole moment. Currently this isn't a fully-featured IGRF implemenation - it supports the coordinate system transformations and so we can get the dipole axis and the magnetic moment. First we need to make an IGRF object, then initialize it for a specific time.
@@ -555,3 +605,21 @@ ax2.set_yticklabels(['{:.2f}'.format(Proton.fromRigidity(float(rr.get_text())).e
 ax2.set_ylabel('Proton Energy [MeV]')
 ax2.legend()
 ```
+
+Finally, let's imagine that a collaborator wants the vertical cutoff rigidity at L=[6, 7, 8], for the full time range we've looked at. But they want data in HDF5. This is mercifully straightforward using `spacepy.datamodel`:
+- As long as we have a `SpaceData` that contains our data arrays as `dmarray`, we can write HDF5 (or CDF, or JSON-headed ASCII) with one line.
+
+Let's make this with some metadata that follows, in a very incomplete way, the NASA ISTP metadata guidelines...
+
+```python
+outdata = dm.SpaceData(attrs={'Notes': 'I made this.', 'Creation Date': '{}'.format(spt.Ticktock.now().ISO)})
+outdata['Epoch'] = epochs.UTC
+outdata['Rc'] = dm.dmarray(cutoffs, attrs={'DEPEND_0': 'Epoch',
+                                           'DEPEND_1': 'L',
+                                           'UNITS': 'GV'})
+outdata['L'] = dm.dmarray(lvals)
+
+outdata.toHDF5('yourUniqueFilenameHere.h5')
+```
+
+If you have a few moments. Try reading the file back in and exploring the data and metadata. Perhaps write as a different file type (CDF, JSON-headed ASCII) and spot any differences in how things are stored or represented.
