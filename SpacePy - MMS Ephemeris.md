@@ -55,7 +55,12 @@ If the named file isn't in this directory then we'll attempt to download it from
 
 ```python
 dname = 'mms1_mec_srvy_l2_ephts04d_20201011_v2.2.1.cdf'
-fname = os.path.join(tutorial_data, 'mms', dname)
+data_dir = os.path.join(tutorial_data, 'mms')
+fname = os.path.join(data_dir, dname)
+# make sure the output directory exists first
+if not os.path.isdir(data_dir):
+    os.path.mkdir(data_dir)
+# and then if the files aren't present, download them
 if not os.path.isfile(fname):
     siteurl = 'https://lasp.colorado.edu/mms/sdc/public/files/api/v1/download/science?file='
     dataurl = ''.join([siteurl, dname])
@@ -158,7 +163,7 @@ What if we start with the GSE position and convert to ECI(J2000) using both?
 
 <details>
     <summary><b>(Click for answer)</b></summary>
-    
+
 ```python
 tts = spt.Ticktock(mmsdata['Epoch'][-3:])
 cc_GSE = spc.Coords(mmsdata['mms1_mec_r_gse'][-3:], 'GSE', 'car', ticks=tts)
@@ -173,7 +178,7 @@ The magnitude of error here is about 13km in the X position, and that conversion
 To see the difference made by using a lower accuracy transformation, change the backend to use the IRBEM library. You can do this either with a keyword argument when setting up your `Coords`, or by updating your deafult settings for `spacepy.coordinates`.
 
 </details>
-    
+
 So, now that we've demonstrated how to use the quaternions to get from one system to another, let's get some actual data and transform it from satellite coordinates into a geophysical system.
 
 Again, we'll need to grab a data file. For this example we'll use "FGM" magnetometer data.
@@ -193,6 +198,8 @@ if not os.path.isfile(fname):
 # This is a big file, so let's use directly do just access what we want!
 from spacepy import pycdf
 fields = pycdf.CDF(fname)  # opens file, but doesn't read anything yet
+# We should close this later, or open it using a context manager
+# and just load what we need up front.
 ```
 
 ```python
@@ -240,7 +247,11 @@ mag = tb.interpol(tt, fieldstt, fields[bvar][:,3])
 
 ### So new let's display the FGM data, in DMPA coordinates, interpolated to the MEC timestamps
 
+But first, before we forget, let's close the CDF file...
+
 ```python
+fields.close()
+# And back to the plotting
 fig = plt.figure()
 ax = fig.add_subplot(111)
 lObj = ax.plot(mmsdata['Epoch'], fieldsDMPA)
@@ -286,7 +297,7 @@ plt.legend(lObj, ['X','Y','Z'])
 
 ### Can we do _this_ transformation using SpacePy's Coords?
 
-So far we've only transformed positions with `spacepy.coordinaes.Coords`. So can we use `Coords` to transform arbitrary vectors between coordinate systems?
+So far we've only transformed positions with `spacepy.coordinates.Coords`. So can we use `Coords` to transform arbitrary vectors between coordinate systems?
 
 We'll test this by using the quaternions to get from DMPA to ECI(J2000), as the former is satellite-specific. Then we'll use `spacepy.coordinates.Coords` to rotate our magnetic field from ECI(J2000) to GSM.
 
@@ -325,8 +336,29 @@ plt.legend(lObj, ['X','Y','Z'])
 
 **Isn't _that_ reassuring!**
 
-While we mostly use position vectors in examples for `Coords`, there's no reason (most of the time) that you can't use `Coords` to represent and transform arbitrary vectors between coordinate systems. 
+While we mostly use position vectors in examples for `Coords`, there's no reason (most of the time) that you can't use `Coords` to represent and transform arbitrary vectors between coordinate systems.
 
-This won't work for coordinate systems like ENU (or the ground-based magnetometer favorite, NED) as they are _position-dependent_ transforms. There's [a discussion on out github](https://github.com/spacepy/spacepy/discussions/563) about this. Geodetic coordinates are another exception, as the use of an ellipsoid Earth means that a Cartesian representation makes no sense and the "local vertical" is not radially-outward. So again this is position dependent. Some common use cases may be supported in a future version of SpacePy, so watch this space. 
+This won't work for coordinate systems like ENU (or the ground-based magnetometer favorite, NED) as they are _position-dependent_ transforms. There's [a discussion on out github](https://github.com/spacepy/spacepy/discussions/563) about this. Geodetic coordinates are another exception, as the use of an ellipsoid Earth means that a Cartesian representation makes no sense and the "local vertical" is not radially-outward. So again this is position dependent. Some common use cases may be supported in a future version of SpacePy, so watch this space.
+
+### Interoperability with AstroPy coordinates
+
+One last fun (?) task to show more package interoperability...
+Imagine you have a special satellite-tracking telescope on the roof of your cabin at _Bear Mountain_. It's got the latest Alt-Az mount and will slew to whatever [Alt-Az coordinates](https://docs.astropy.org/en/stable/api/astropy.coordinates.AltAz.html) you punch in.
+- Alt-Az stands for Altitude-Azimuth where _azimuth_ is an angle positive Eastward of North and _altitude_ is the elevation angle
+
+```python
+# This example is shamelessly modified from https://docs.astropy.org/en/stable/generated/examples/coordinates/plot_obs-planning.html
+import astropy.units as apu
+from astropy.coordinates import SkyCoord, EarthLocation, AltAz
+mms_spc = spc.Coords(mmsdata['mms1_mec_r_eci'][0], 'ECI2000', 'car', ticks=mec_ticks[0])
+mms_ap = mms_spc.to_skycoord()
+bear_mountain = EarthLocation(lat=41.3*apu.deg, lon=-74*apu.deg, height=390*apu.m)
+utcoffset = -4*apu.hour  # Eastern Daylight Time
+time = mec_ticks.APT[0] - utcoffset
+mmsaltaz = mms_ap.transform_to(AltAz(obstime=time, location=bear_mountain))
+print("MMS's Altitude (angle), Azimuth = {:g}, {:g}".format(mmsaltaz.alt[0], mmsaltaz.az[0]))
+```
+
+So MMS should be viewable from our stated location at Bear Mountain, at the start of the day we were looking at.
 
 Finally, there's nothing in this notebook (except the data) that's MMS-specific. Do you have vector-rotating quaternions? Do you have vectors you need to rotate between standard geophysical systems? No mission-specific support is required. We target _generic_ tools. And as interoperability between Python packages in the Heliophysics arena continues to increase, you can use the best tool for each particular job, flexibly. Building on top of the ecosystem saves time and effort, while reaping the benefits of well-tested code.
