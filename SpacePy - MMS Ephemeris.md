@@ -26,13 +26,16 @@ MEC files with a major version number of >=2 (i.e. 2.x.x) give the quaternion to
 ### Setup
 This tutorial uses leapsecond data that SpacePy normally maintains on a per-user basis. (To download or update this data on your own installation of SpacePy, use toolbox.update()).
 
-For the Python in Heliophysics summer school, we have provided a shared directory with the normal SpacePy configuration and managed data. There are also other data files specific to the summer school so that data downloads don't need to be run. So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to point SpacePy at this directory before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this, but if you're using this notebook in the summer school then uncomment the next cell before running it.
+For the Python in Heliophysics summer school, we have provided a shared directory with the normal SpacePy configuration and managed data. There are also other data files specific to the summer school so that data downloads don't need to be run. So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to point SpacePy at this directory before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this, but if you're not using this notebook in the summer school then set `is_pyhc = False` in the next cell before running it.
 
 ```python
 import os
-tutorial_data = '.'
-#tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for Python in Heliophysics summer school
-#os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
+is_pyhc = True
+if is_pyhc:
+    tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for Python in Heliophysics summer school
+    os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
+else:
+    tutorial_data = '.'
 ```
 
 ```python
@@ -44,10 +47,9 @@ import spacepy.datamodel as dm
 import spacepy.toolbox as tb
 import matplotlib.dates as mpd
 
-#now some plotting setup, we also turn on "magic" inline plotting in the ipython notebook
-import matplotlib.pyplot as plt #imports plot library
-import spacepy.plot as splot #gets spacepy plot tools and style sheets
-%matplotlib inline
+#now some plotting setup
+import matplotlib.pyplot as plt  # imports plot library
+import spacepy.plot as splot  # gets spacepy plot tools and style sheets
 ```
 
 First let's check whether we have the data file to work on...
