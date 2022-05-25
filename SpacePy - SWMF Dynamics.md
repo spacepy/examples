@@ -44,11 +44,19 @@ os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this dire
 Next, import the pertinent modules that will support this tutorial.
 
 ```python
+# Import numpy:
+import numpy as np
+
+# Plotting utilities:
 import matplotlib.pyplot as plt
 import spacepy.plot as splot
-from spacepy import pybats
+from matplotlib import gridspec
 
-# for convenient notebook display and pretty out-of-the-box plots...
+# Top-level and model-specific Pybats modules:
+from spacepy import pybats
+from spacepy.pybats import bats, rim
+
+# For convenient notebook display and pretty out-of-the-box plots...
 %matplotlib inline
 splot.style('default')
 ```
@@ -151,4 +159,211 @@ print(f"Currently loaded frame  is now #{mhd.attrs['iframe']} representing T={mh
 ## Find the right class for the job
 The above syntax gets us to the data, but doesn't do us any favors in terms of doing actual work. Further, our RIM data is not in a common data format, so we haven't been able to open that data yet. Let's take a moment to see how *model- and output-specific classes* enable advanced features and powerful plotting methods. 
 
-Our MHD data is from BATS-R-US, meaning we should turn to the *model-specific submodule* of pybats: `spacepy.pybats.bats`. Recognizing that the MHD files are 2D cuts, we can jump to the `spacepy.pybats.bats.Bats2d` class, which inherits from the `IdlFile` class and adds a lot of functionality.
+Our MHD data is from BATS-R-US, meaning we should turn to the *model-specific submodule* of pybats: `spacepy.pybats.bats`. Recognizing that the MHD files are 2D cuts, we can jump to the `spacepy.pybats.bats.Bats2d` class, which inherits from the `IdlFile` class and adds a lot of functionality via object methods. Exploring what is available is as easy as using tab-complete and docstrings:
+
+```python
+# Re-open our MHD file as a Bats2d object.
+mhd = bats.Bats2d(path_north + 'GM/y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs')
+mhd.calc_b() # Calculate the total magnetic field and unit vector
+
+mhd['bx_hat']
+```
+
+Similarly, code-specific modules allow us to read our ionosphere output:
+
+```python
+iono = rim.Iono(path_north + 'IE/it150321_060040_000.idl.gz')
+iono.tree(attrs=True)
+```
+
+In general, always seek the class specific to the model and output type in question. Fall back to generic classes if nothing specific is available. For example, are you trying to look at model results for the PWOM model? Use `spacepy.pybats.pwom` and look for classes associated with your output file type. Don't see a class related to your output type? Fall back to generic classes within `spacepy.pybats`. Is your output file a different format then the standard SWMF output types? Request a new sub-module or class. Better yet, draft one up yourself and submit a pull request via Github!
+> **Pybats Hint:** Always seek the class specific to the model and output type in question. Fall back to generic classes if nothing specific is available.
+
+
+
+### Plotting
+
+The fundamental goal of Pybats is to provide the user access to data in the various SWMF output files. At that point, you can use Matplotlib to create line plots, contours, etc. However, many helper methods exist to expedite this process greatly. Generally, these are methods that begin with `add_[plot type]`. Look for those methods as major time savers. These methods typically return matplotlib objects such as the figure and axes objects, lines, contours, and other components. This allows for further configuration of plots.
+
+Any `add_[plot type]` object method takes advantage of Spacepy's `set_target()` function. In short, the default behavior of our plotting methods is to create a new figure and new axis. We can use the `target=` keyword argument to set a specific figure *or* axes on which to place the plot. Additionally, the `loc=` keyword argument can be used to specify the subplot location on a figure in the usual Matplotlib way. 
+
+To exemplify this, let's create some example figures:
+
+```python
+# Add a summary plot of the grid resolution of BATS-R-US for the first epoch in our output file:
+fig, ax = mhd.add_grid_plot()
+
+# Over-plot unfilled contours of pressure using a log scale and only 21 contour levels:
+mhd.add_contour('x', 'z', 'p', 21, dolog=True, target=ax, filled=False)
+```
+
+In this simple example, we first plot a diagram of the grid resolution where each region represents an area where the grid spacing is constant within. This method returns the figure and axes objects, which we capture as new variables. Then, we *overplot* pressure on the same axes, aided by the `target` keyword syntax. At this time in the simulation, the extreme CME conditions are making first contact with bowshock. We see the impact of grid resolution: the shock wave is broader in regions of lower spatial resolution, and our contours get noisier in low-resolution regions.
+
+Let's do this again, but instead look at the magnetic field lines and ionospheric Birkeland currents:
+
+```python
+# Create a new figure:
+fig = plt.figure(figsize=[8,4])
+
+# Add the magnetosphere to the left-hand side via a contour of thermal pressure.
+# Use keyword arguments to add a color bar, use a log scale, and zoom in on the region of interest.
+# Method returns four different matplotlib objects.
+fig, ax, cont, cbar = mhd.add_contour('x', 'z', 'p', target=fig, loc=121, dolog=True, add_cbar=True, xlim=[-48, 32], ylim=[-64, 64])
+
+# Add magnetic field lines using specialized object methods:
+mhd.add_b_magsphere(target=ax)
+
+# Add Birkeland currents to the right-hand side:
+iono.add_cont('n_jr', add_cbar=True, target=fig, loc=122)
+
+# Use tight_layout to clean things up a bit:
+fig.tight_layout()
+```
+
+Note how the keyword arguments to our convenience plotting methods (`add_[plot name]` methods) do most of the heavy lifting: setting the plot range, adding color bars, etc. Also note how a lot of work is being done for us in terms of labeling axes and color bars. Further customization can be done by capturing the returned matplotlib objects and leverging their methods.
+
+Our `add_b_magsphere` is useful for quick-look magnetic field line placement. By default, it estimates the open-closed boundary and adds a range of open and closed field lines. While convenient, it is ultmately limited. There are many more options for adding field lines (and other vector traces) that can give you fine control over what's being done. We'll talk more about tracing later.
+
+At this point, we have all of the ingredients to achieve our first goal: looking at the time dynamics of the magnetosphere and ionosphere as our extreme storm sudden impulse arrives. Without further ado...
+
+
+### Illustrating magnetosphere-ionosphere dynamics in a single figure
+Our goal here is to create a single figure that captures the magnetosphere-ionosphere response to our extreme storm sudden commencement for *both* the northward and southward IMF scenarios. Specifically, we want to see the following:
+
+- Illustrate the time history of the storm sudden impulse.
+- Characterize the magnetopause stand-off distance.
+- Show the evolution of the Field-Aligned Currents (FACs) during storm onset.
+- Contrast the two simulations to see impact of IMF orientation on results.
+
+The code below ties the concepts from above to achieve the points above. 
+
+```python
+# Gather common plot method kwargs together:
+kwargs = {'xlim':[-25,15], 'ylim':[0,20], 'dolog':True}
+
+# Open the MHD data files, which contain the epochs we wish to plot.
+# Note that we assume both files have the same number of frames at the exact times. This is
+# not always a safe assumption!
+mhd_north = bats.Bats2d(path_north + 'GM/y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs')
+mhd_south = bats.Bats2d(path_south + 'GM/y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs')
+
+# Save time of first frame:
+t_start = mhd_north.attrs['time']
+
+# Create figure and set spacing between/around axes.
+# These values were obtained via trial & error.
+fig = plt.figure(figsize=(12, 7.8))
+fig.subplots_adjust(right=.95, bottom=.065, left=.08, top=.935, hspace=.06)
+    
+# Create gridspec object for placing axes. 4 rows, 6 columns. We'll make
+# our magnetosphere plots wider than our ionosphere plots.
+grid = gridspec.GridSpec( 4, 6 )
+
+# Loop over the epochs stored in our MHD files.
+for i in range(mhd_north.attrs['nframe']):
+    # Select the correct frame in our MHD files:
+    mhd_north.switch_frame(i)
+    mhd_south.switch_frame(i)
+        
+    # Get information about current epoch:
+    t_now = mhd_north.attrs['time']
+        
+    # Open associated ionosphere files by building file names from the 
+    # datetime objects, using f-strings, and being aware of the power of 
+    # the string formatting mini-language. Alternativel, the glob module is
+    # helpful.
+    iono_north = rim.Iono(path_north + f"IE/it{t_now:%y%m%d_%H%M%S}_000.idl.gz")
+    iono_south = rim.Iono(path_south + f"IE/it{t_now:%y%m%d_%H%M%S}_000.idl.gz")
+        
+    # Get plot ranges for IE plots - absolute maximum from BOTH simulations.
+    maxz = max( np.abs(iono_north['n_jr']).max(), np.abs(iono_south['n_jr']).max())
+    # Get plot ranges for GM plots - small to max for both simulations.
+    zlim=[0.005, max(mhd_north['p'].max(), mhd_south['p'].max())]
+        
+    # Add magsphere plots: Start by creating axes that are wider than tall 
+    # using our gridspec object:
+    a1, a2 = fig.add_subplot(grid[i,:2]), fig.add_subplot(grid[i,4:])
+    # Plot our contours to each using our common plot kwargs.
+    # The "out" variables capture the returned values as tuples.
+    out1 = mhd_north.add_contour('x','z','p',target=a1, zlim=zlim, **kwargs) 
+    out2 = mhd_south.add_contour('x','z','p',target=a2, zlim=zlim, **kwargs)
+    # Add magnetic field lines to both.
+    mhd_north.add_b_magsphere(a1)#, tol=0.000001)
+    mhd_south.add_b_magsphere(a2)#, tol=0.000001)
+        
+    # Now add FAC plots. Start by creating axes objects...
+    a3 = fig.add_subplot(grid[i,2], polar=True)
+    a4 = fig.add_subplot(grid[i,3], polar=True)
+    # Plot to each axes. Again, "out" variables catpure all returned objects.
+    out1 = iono_north.add_cont('n_jr', target=a3, maxz=maxz, extend='both')
+    out2 = iono_south.add_cont('n_jr', target=a4, maxz=maxz, extend='both')
+
+    # Add color bar between FAC plots. Start by getting the bounding box
+    # for each axes, use that position to set where to place color bar.
+    b1 = a3.get_position()
+    b2 = a4.get_position()
+    center = b1.x1 + (b2.x0-b1.x1)/2.
+    # Create color bar axes:
+    ax = fig.add_axes( [center-.005, b1.y0+.005, .01, b1.y1-b1.y0-.01] )
+    # Add color bar to axes. "out1[2]" is the matplotlib contour object from
+    # the FAC contour plot returned by the `add_cont` method.
+    cbar = plt.colorbar(out1[2], cax=ax)
+    cbar.set_ticks([])
+    # Add label to cbar:
+    fig.text(center, b1.y1, '$\\pm${:.1f}$\\mu A/m^2$'.format(maxz),
+             color='gray',ha='center', size=10)
+        
+    # Fit and finish: fix overlapping titles/labels, properly label epochs and simulations:
+    # Add epoch labels to leftmost plot using bounding box to get the position:
+    box = a1.get_position()
+    x = .014
+    y = (box.y1-box.y0)/2. + box.y0
+    # Get the time from frame zero:
+    delT = (t_now - t_start).total_seconds() # total seconds from first frame...
+    mins = int(np.floor(delT/60.)) # Get minutes...
+    secs = np.abs(int(delT - 60*mins)) # get seconds...
+    # Add text to first figure:
+    fig.text(x,y,'$T_{{Arrival}}+${0:01d}:{1:02d}'.format(mins,secs),
+             ha='center',va='center',rotation=90, size=16)
+        
+    # Adjust plots labels
+    # Put tick labels on right side of rightmost plot:
+    a2.yaxis.set_label_position("right")
+    a2.yaxis.tick_right()
+    # Turn off redundant labels
+    if i < mhd_north.attrs['nframe'] - 1: 
+        # Turn off labels if we're not on the last row...
+        a1.set_xlabel('')
+        a2.set_xlabel('')
+        a1.set_xticklabels('')
+        a2.set_xticklabels('')
+            
+    # Set dial plot tick labels (x-axes tick labels)
+    top, bottom = '', '' # Default top/bottom labels are blank.
+    if i == 0: 
+        top = r'$J_{Radial}$' # Label top of dials for top row
+    if i == mhd_north.attrs['nframe'] - 1: 
+        bottom='00' # Label bottom of dials for bottom row.
+    # Apply tick labels to each dial plot.
+    a3.set_xticklabels(['',   top, '18', bottom])
+    a4.set_xticklabels(['06', top,   '', bottom])
+        
+    # Turn off topmost tick label on MHD plots, which overlap with other plots:
+    plt.setp(a1.get_yticklabels()[-1], visible=False) 
+    plt.setp(a2.get_yticklabels()[-1], visible=False)
+        
+# Finally, some text labels to distinguish the northward and southward cases:
+# Use the bounding box for our color bar axes object as a guide:
+box = ax.get_position()
+x = (box.x1-box.x0)/2 +  box.x0
+# Create and apply centered text at the top of the figure:
+fig.text(x, .97, 'Northward B$_Z$ Case     |     Southward B$_Z$ Case', size=20, ha='center')
+```
+
+This is nearly the final plot in the actual publication. Note that most of the work isn't opening and manipulating data; rather it is in polishing the figure to create a publication-worthy image. When creating complex figures like this, I recommend sketching out your vision for the plot, then playing in IPython to get it where you want it. 
+
+In this figure, there are a lot of good physics on display. We see identical magnetospheres for the first few moments of the storm, including impulse-driven FACs that form on the dayside and propagate to the nightside. We see both simulations yield similar *initial* dayside compression. 70 seconds into the event, the two simluations rapidly diverge. The southward IMF case leads to strong magnetic reconnection, eroding the dayside standoff distance compared to the northward IMF case. The southward case also presents with much stronger and lower-latitude FACs, intensifying the danger to the power grid for this case. 
+
+```python
+
+```
