@@ -44,6 +44,9 @@ os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this dire
 Next, import the pertinent modules that will support this tutorial.
 
 ```python
+# Import cpickle library:
+import pickle
+
 # Import numpy:
 import numpy as np
 
@@ -222,7 +225,7 @@ fig.tight_layout()
 
 Note how the keyword arguments to our convenience plotting methods (`add_[plot name]` methods) do most of the heavy lifting: setting the plot range, adding color bars, etc. Also note how a lot of work is being done for us in terms of labeling axes and color bars. Further customization can be done by capturing the returned matplotlib objects and leverging their methods.
 
-Our `add_b_magsphere` is useful for quick-look magnetic field line placement. By default, it estimates the open-closed boundary and adds a range of open and closed field lines. While convenient, it is ultmately limited. There are many more options for adding field lines (and other vector traces) that can give you fine control over what's being done. We'll talk more about tracing later.
+Our `add_b_magsphere` is useful for quick-look magnetic field line placement. By default, it estimates the open-closed boundary and adds a range of open and closed field lines. While convenient, it is ultmately limited. There are many more options for adding field lines (and other vector traces) that can give you fine control over what's being done. Users should explore the `Bats2d.get_stream()` and `Bats2d.add_stream_scatter()` object methods.
 
 At this point, we have all of the ingredients to achieve our first goal: looking at the time dynamics of the magnetosphere and ionosphere as our extreme storm sudden impulse arrives. Without further ado...
 
@@ -363,6 +366,94 @@ fig.text(x, .97, 'Northward B$_Z$ Case     |     Southward B$_Z$ Case', size=20,
 This is nearly the final plot in the actual publication. Note that most of the work isn't opening and manipulating data; rather it is in polishing the figure to create a publication-worthy image. When creating complex figures like this, I recommend sketching out your vision for the plot, then playing in IPython to get it where you want it. 
 
 In this figure, there are a lot of good physics on display. We see identical magnetospheres for the first few moments of the storm, including impulse-driven FACs that form on the dayside and propagate to the nightside. We see both simulations yield similar *initial* dayside compression. 70 seconds into the event, the two simluations rapidly diverge. The southward IMF case leads to strong magnetic reconnection, eroding the dayside standoff distance compared to the northward IMF case. The southward case also presents with much stronger and lower-latitude FACs, intensifying the danger to the power grid for this case. 
+
+
+### Extracting MHD values
+
+The above plot is great, but it could be more *quantitative*, especially concerning the magnetopause stand-off distance. Let's find the stand-off distance for an MHD data frame by *extracting* values from our MHD object. For the purposes of this tutorial, we'll define the stand-off distance as the point where the magnetic field flips from northward to southward. Of course, this only works for the southward IMF case, but it's good enough for this tutorial.
+
+The `Bats2d.extract()` method will interpolate the MHD results to any set of X,Y points. This is extremely useful for extracting values along a stream line or magnetic field line. For our purposes, however, we just want values along the Sun-Earth line, then look for the flip in magnetic field direction.
+
+```python
+# Pick a good frame:
+mhd_south.switch_frame(2)
+
+# Create arrays of X-Y points and extract to those positions:
+x = np.arange(2, 8, 1/16.) # Sun-Earth line
+y = np.zeros(x.size) # ...in the equatorial plane.
+line = mhd_south.extract(x,y)
+
+# Location of first open-field cell:
+x2 = x[line['bz'] < 0.][0]
+
+# Location of last closed-field cell:
+x1 = x[line['bz'] > 0.][-1]
+
+# Location is mean of first-and-last closed cell:
+boundary = (x1 + x2)/2.
+
+# Create a diagram to show that this works:
+fig = plt.figure()
+ax = fig.add_subplot(111)
+ax.plot(line['x'], line['bz'])
+ax.set_ylabel('$B_Z$ ($nT$)')
+ax.set_xlabel('GSM X ($R_E$)')
+
+# Place a vertical line at our magnetopause:
+ax.vlines(boundary, -1000, 4000, linestyles='dashed', colors='k')
+```
+
+Our magnetopause shows up clearly, and our simple algorithm works! If we did this extraction for *every output file* in our MHD code, and devised a good identification method for the northward IMF case, we could create a time series of stand-off distances. Rather than go through that here, I've stored the values in a Python pickle. Let's open that data file and illustrate our stand-off distance:
+
+```python
+# Open up stand-off info from our python pickle
+with open(tutorial_data + 'standoff_trace_NS.pkl', 'rb') as f:
+    L1 = pickle.load(f)
+    L2 = pickle.load(f)
+    t = pickle.load(f)
+    
+# Open both BATS-R-US log files:
+logN = pybats.LogFile(path_north + 'GM/log_e20150321-054500.log')
+logS = pybats.LogFile(path_south + 'GM/log_e20150321-054500.log')
+
+# Create our figure of appropriate size:
+fig=plt.figure(figsize=[8,8])
+
+# First subplot:
+ax = fig.add_subplot(211)
+
+# Plot our Dst to give context to stand-off distance values:
+ax.plot(logN['time'], logN['dst'], lw=3, label='Northward IMF', c='DarkBlue')
+ax.plot(logS['time'], logS['dst'], lw=3, label='Southward IMF', c='Gold')
+
+# Configure our axes to clean things up.
+ax.set_ylim([-100,300]) # Set y-axis range
+ax.set_ylabel(r'MHD $D_{ST}$ ($nT$)', size=20) # Set labels
+splot.applySmartTimeTicks(ax, t, dolabel=False) # Configure time axis.
+ax.legend() # Add a legend using the labels in our plotting function.
+
+# Now plot stand-off distance of dayside magnetosphere.
+# Second subplot:
+ax = fig.add_subplot(212)
+
+# Plot and label and configure...
+ax.plot(t, L1, lw=3, label='Northward IMF', c='DarkBlue')
+ax.plot(t, L2, lw=3, label='Southward IMF', c='Gold')
+ax.set_ylabel('Standoff Distance ($R_E$)', size=20)
+splot.applySmartTimeTicks(ax, t)
+ax.legend()
+
+# Clean up the plot layout:
+fig.tight_layout()
+```
+
+...and that's it! We illustrated our model results and extracted useful values. Of note here is the huge rise in Dst, the apparent "precursor" signature that occurs before the CME contacts the bow shock, and the fact that the southward IMF case produces a magnetopause that is ~2 Earth Radii upstream- only 1 R<sub>E</sub> from the Earth's surface!
+
+
+## Epilogue
+In this tutorial, we had worked through a crash-course on using Pybats to explore output from the SWMF, create illustrative figures, and extract values to create quantitative comparisons. There's much, much more however - including automatic data fetching, advanced stream tracing, and many, many classes to handle a variety of outputs. I recommend perusing Pybats and its submodules with IPython's tab-complete capabilities and reading the docstrings.
+
+Overall, much of the capability here is built on Spacepy's `datamodel` package. If you can use that, you can navigate SWMF output without much confusion.
 
 ```python
 
