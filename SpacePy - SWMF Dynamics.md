@@ -5,14 +5,30 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.13.8
+      jupytext_version: 1.14.4
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
     name: python3
 ---
 
+<!-- #region -->
 # SpacePy Tutorial -- SWMF Dynamics
+
+## Tutorial Information & Accompanying Video
+
+This tutorial was created for the Python in Heliophysics Community (PyHC) 2022 Summer School.
+[Video of the original tutorial can be found here.](https://www.youtube.com/live/vHlOI6JAZ7A?feature=share)
+Commands relevant to the PyHC Summer School Conda environment have been commented out.
+
+Ensure that Spacepy is properly installed before running this Jupyter notebook.
+
+The data that accompanies this tutorial has been archieved at Zenodo.com with the following DOI: 10.5281/zenodo.7693203. 
+[Users may download the data here.](https://doi.org/10.5281/zenodo.7693203)
+
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7693203.svg)](https://doi.org/10.5281/zenodo.7693203)
+
 
 ## Background
 The Space Weather Modeling Framework (SWMF) is a powerful coupled-model approach for investigating the system dynamics of the magnteophere, ionosphere, ring current, and other regions of geospace. It couples several models together to create self-consistent simulations of geospace. Most commonly, this includes BATS-R-US, the Ridley Ionosphere Model (RIM), and one of several ring current models. The output from these simulations can be complicated to work with as they have different formats, different values, and different approaches to analysis. This tutorial demonstrates how to use the Spacepy Pybats module to explore and analyze SWMF output.
@@ -29,16 +45,18 @@ Concepts explored in this tutorial include,
   - Various features of [spacepy.plot](https://spacepy.github.io/plot.html), including the `target` keyword argument syntax.
   - Classes and inheritance in Python.
 
-
+<!-- #endregion -->
 
 ## Setup
 
-As is the case for the other Spacepy tutorials, we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to [point SpacePy at this directory](https://spacepy.github.io/configuration.html) before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this.
+As is the case for the other Spacepy tutorials, we use a single directory containing all the data for this tutorial. This data is available via the above DOI. Next, we create a variable to point to that directory- you will need to customize this to correspond to the locaction of the data on your machine.
 
 ```python
-tutorial_data = '/shared/jtniehof/spacepy_tutorial/'  #All data for this summer school, will be used throughout
-import os
-os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
+tutorial_data = '/home/dwelling/pybats_demo/'  #All data for this tutorial, will be used throughout.
+
+# Next two commands are for the PyHC environment use case.
+#import os
+# os.environ['SPACEPY'] = tutorial_data  # No longer necessary for non-PyHC use.
 ```
 
 Next, import the pertinent modules that will support this tutorial.
