@@ -5,16 +5,14 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.13.8
+      jupytext_version: 1.16.1
   kernelspec:
-    display_name: Python [conda env:panhelio] *
+    display_name: Python 3 (ipykernel)
     language: python
-    name: conda-env-panhelio-py
+    name: python3
 ---
 
-SpacePy Tutorial -- Cusp Energetic Particles
-====================================
-
+# SpacePy Tutorial -- Cusp Energetic Particles
 This tutorial reproduces key figures from "Association of cusp energetic ions with geomagnetic storms and substorms" (Niehof et al, 2012; [doi:10.5194/angeo-30-1633-2012](https://doi.org/10.5194/angeo-30-1633-2012)).
 
 It illustrates several functions in SpacePy and the scientific Python ecosystem:
@@ -26,9 +24,12 @@ It illustrates several functions in SpacePy and the scientific Python ecosystem:
   - Superposed epoch analysis [spacepy.seapy](https://spacepy.github.io/seapy.html)
   - Point-processes [spacepy.poppy](https://spacepy.github.io/poppy.html)
 
+This tutorial was originally written for the [2022 Python in Heliophysics summer school](https://heliopython.org/summer-school) and video from that event can be seen [here](https://youtu.be/vHlOI6JAZ7A?list=PLDKhoNyHGTFZ345-lI-EeC4CAQhNUfUS0&t=17102). There may be slight differences between the current notebook and the notebook as presented.
 
-Setup
---------
+
+## Setup--Summer School
+Follow these instructions if you are following along with the tutorial in the 2024 PyHC summer school; otherwise skip down.
+
 This tutorial uses solar wind and leapsecond data that SpacePy normally maintains on a per-user basis. (To download this data on your own installation of SpacePy, use [toolbox.update()](https://spacepy.github.io/autosummary/spacepy.toolbox.update.html#spacepy.toolbox.update)).
 
 However, for the purposes of this summer school, we have provided a shared directory with the normal SpacePy configuation and managed data. This saves us from waiting for 300 people to download at once. There are also other data files specific to this project.
@@ -36,14 +37,42 @@ However, for the purposes of this summer school, we have provided a shared direc
 So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to [point SpacePy at this directory](https://spacepy.github.io/configuration.html) before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this.
 
 ```python
-#tutorial_data = 'spacepy_tutorial'
-tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for this summer school, will be used throughout
-import os
-os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
+# Only use this if participating in the summer school!
+#tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for this summer school, will be used throughout
+#import os
+#os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
 ```
 
-Background
-------------------
+## Setup--Not Summer School
+Follow these instructions if you are running this notebook on your own, outside of the summer school environment. If you are in the summer school, skip this section.
+
+The first thing we need to do is install SpacePy. If SpacePy is already installed, you can remove that line. We then update the OMNI solar wind database and leapsecond database which we will use later, using using [toolbox.update()](https://spacepy.github.io/autosummary/spacepy.toolbox.update.html#spacepy.toolbox.update).
+
+Download the [sample data for this notebook](https://doi.org/10.5281/zenodo.10904473). Unzip it and update the `tutorial_data` variable in the cell below, then run that cell. It will also download the [high resolution OMNI](https://omniweb.gsfc.nasa.gov/) dataset.
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10904473.svg)](https://doi.org/10.5281/zenodo.10904473)
+
+
+
+```python
+# Only use this if NOT participating in the summer school!
+! pip install spacepy
+
+import spacepy.toolbox
+spacepy.toolbox.update(all=True)
+
+import os.path
+# You will need to update this line to point to the directory where you put the tutorial data.
+# This directory should contain hr_dst, savesets, etc.
+tutorial_data = os.path.expanduser('~/spacepy_tutorial')
+
+# Download high-res omni
+hro_base = os.path.join(tutorial_data, 'hro')
+spacepy.toolbox._crawl_yearly('https://spdf.gsfc.nasa.gov/pub/data/omni/omni_cdaweb/hro_5min/',
+                              r'omni_hro_5min_(199\d|200[012])[01]\d01_v01.cdf', hro_base, startyear=1996)
+```
+
+## Background
 This study relates to energetic ions observed in the Earth's magnetospheric cusp and the connection to the tail region. The magnetic field geometry is critical to the physics involved. For those unfamiliar with magnetospheric physics, we illustrate them via SpacePy's support for field models and their visualization--using a sledghammer to kill a flea.
 
 ### Getting the model field
@@ -138,7 +167,7 @@ The field line trace starts at fixed latitudes, tracing out along the field line
 #### Things to try
 Change the set of latitudes used (e.g. every 15 degrees).
 
-Try looping over X explicitly with Z fixed at 0 (equatorial plane); note the direction of the trace.
+Try looping over starting X explicitly with starting Z fixed at 0 (equatorial plane); note the direction of the trace.
 
 Change the step size.
 
@@ -150,6 +179,7 @@ for lat in numpy.arange(-180, 185, 5):
     # Tracing antiparallel to field from North pole, parallel from South
     direction = 2 * (abs(lat) > 90) - 1
     l = numpy.radians(lat)
+    # TRY: Define a range of starting X and start Z from zero, will also need to define direction
     startx = numpy.sin(l)
     startz = numpy.cos(l)
     # TRY: increasing or decreasing step size (ds)
@@ -166,6 +196,7 @@ for lat in numpy.arange(-180, 185, 5):
 fig
 ```
 
+<!-- #region -->
 ### Magnetopause
 It's useful to have the magnetopause location to ensure the domain presented is one where the field model is valid.
 
@@ -177,6 +208,22 @@ We take advantage of the rotational symmetry of the Shue model to plot the magne
 
 #### Things to try
 Plot the plasmapause location using [getPlasmaPause](https://spacepy.github.io/autosummary/spacepy.empiricals.getPlasmaPause.html#spacepy.empiricals.getPlasmaPause). Given the XZ slice, this really only makes sense as one location for 00MLT and one for 12MLT
+
+<details>
+    <summary>(Click for one answer)</summary>
+
+<p>
+
+```python
+tt = spacepy.time.Ticktock(datetime.datetime(2000, 4, 6))
+midnight = spacepy.empiricals.getPlasmaPause(tt, LT=0) * -1  # this is PP distance, midnight is negative X
+noon = spacepy.empiricals.getPlasmaPause(tt, LT=12)
+ax.plot([midnight, noon], [0,0] , color='b', marker='o', lw=0)
+```
+
+</p>
+</details>
+<!-- #endregion -->
 
 ```python
 import spacepy.empiricals
@@ -202,9 +249,9 @@ Put the annotation text in a different place with an arrow pointing to it.
 
 ```python
 ax.annotate('Tail', xy=(-11, 0), ha='center', bbox=dict(boxstyle="round", fc='w', ec='k'))
-ax.annotate('Cusp', xy=(6,6), ha='center', bbox=dict(boxstyle="round", fc='w', ec='k'))
+# TRY: Change color with ec, location with xy
+ax.annotate('Cusp', xy=(6, 6), ha='center', bbox=dict(boxstyle="round", fc='w', ec='k'))
 fig
-
 ```
 
 ### Cleanup
@@ -230,8 +277,7 @@ This figure provides context for the science question: what are the potential so
 To test these mechanisms, particularly the first 2, [Niehof et al., (2012)](https://doi.org/10.5194/angeo-30-1633-2012) used a list of cusp crossings and associated energetic particle observations from an earlier study ([Niehof et al., 2010](https://doi.org/10.1029/2009JA014827)).
 
 <!-- #region -->
-Preparing data sets
-----------------------------
+## Preparing data sets
 
 ### Cusp-crossing data
 The cusp pass data from the Polar spacecraft in Niehof et al. (2010) was calculated in IDL and saved as an IDL saveset. This provides a good example of moving from IDL to Python. An IDL saveset can easily be read into a Python dictionary with [scipy.io](https://docs.scipy.org/doc/scipy/reference/generated/scipy.io.readsav.html#scipy.io.readsav). This saveset has been included in the `tutorial_data` directory.
@@ -264,7 +310,7 @@ import os.path
 
 import scipy.io
 
-po_data = scipy.io.readsav(os.path.join(tutorial_data, 'all_passes.idl'))
+po_data = scipy.io.readsav(os.path.join(tutorial_data, 'savesets', 'all_passes.idl'))
 # Whether in cusp/not, or energetic particles present/not, was saved as 0/1
 po_cusp = numpy.require(po_data['cusp'], dtype=bool)
 po_cep = numpy.require(po_data['cep'], dtype=bool)
@@ -322,7 +368,7 @@ matplotlib.pyplot.plot(dst_times[:28800], dst[:28800])
 ```
 
 <!-- #region -->
-In addition to ring current effects, Dst can be affected by magnetosphere compression due to changes in solar wind dynamic pressure. This can obscure the details of storm onset, so a pressure-corrected Dst* index is often used [getDststar](https://spacepy.github.io/autosummary/spacepy.empiricals.getDststar.html#spacepy.empiricals.getDststar) will return Dst* for given times directly from the hourly OMNI database; however, in this case we are using a one-minute Dst, so wish to use a higher resolution pressure correction. `getDststar` also applies correction from inputs of uncorrected Dst and solar wind dynamic pressure; we obtain the latter from the 5 minute high resolution OMNI dataset.
+In addition to ring current effects, Dst can be affected by magnetosphere compression due to changes in solar wind dynamic pressure. This can obscure the details of storm onset, so a pressure-corrected Dst* index is often used. [getDststar](https://spacepy.github.io/autosummary/spacepy.empiricals.getDststar.html#spacepy.empiricals.getDststar) will return Dst* for given times directly from the hourly OMNI database; however, in this case we are using a one-minute Dst, so wish to use a higher resolution pressure correction. `getDststar` also applies correction from inputs of uncorrected Dst and solar wind dynamic pressure; we obtain the latter from the 5 minute high resolution OMNI dataset.
 
 [numpy.interp](https://numpy.org/doc/stable/reference/generated/numpy.interp.html) will nicely interpolate for us, but it has a few limitations: it won't interpolate across fill, and it doesn't handle datetimes. So we use [Ticktock](https://spacepy.github.io/autosummary/spacepy.time.Ticktock.html#spacepy.time.Ticktock) to convert to TAI.
 
@@ -349,11 +395,11 @@ pdyn = numpy.interp(matplotlib.dates.date2num(dst_times),
 
 ```python
 # This pattern should be familiar from reading the USGS Dst above
-hro_files = sorted(glob.glob(os.path.join(tutorial_data, 'hro', '*', 'omni_hro_5min_*01_v01.cdf')))
+hro_files = sorted(glob.glob(os.path.join(tutorial_data, 'hro', 'omni_hro_5min_*01_v01.cdf')))
 hrodata = spacepy.pycdf.concatCDF([spacepy.pycdf.CDF(f) for f in hro_files], ['Pressure', 'Epoch'])
 # Fill is 99.99 for this data set
 hrogood = hrodata['Pressure'] < 50.
-# TRY: interpolate using a different timebase
+# TRY: interpolate using a different timebase, e.g. MJD
 pdyn = numpy.interp(spacepy.time.Ticktock(dst_times).TAI,
                     spacepy.time.Ticktock(hrodata['Epoch'][hrogood]).TAI,
                     hrodata['Pressure'][hrogood])
@@ -395,7 +441,8 @@ Increase/decrease window size and resolution (delta)
 ```python
 import spacepy.seapy
 
-onsets = spacepy.toolbox.loadpickle(os.path.join(tutorial_data, 'storm_onsets.pkl'))
+onsets = spacepy.toolbox.loadpickle(os.path.join(tutorial_data, 'savesets', 'storm_onsets.pkl'))
+# TRY: change the delta and window
 superposed = spacepy.seapy.Sea(dst_star, dst_times, onsets,
                                delta=datetime.timedelta(minutes=1),
                                window=datetime.timedelta(days=2))
@@ -413,7 +460,7 @@ One characteristic of a substorm onset is a dipolarization in the tail, where th
 The data are stored as a time and the time since last substorm, from which a zero indicates currently in a dipolarization event. So first we extract all the times within an event, and then find only those times which start an event.
 
 ```python
-substorm_data = scipy.io.readsav(os.path.join(tutorial_data, 'substorms.idl'))
+substorm_data = scipy.io.readsav(os.path.join(tutorial_data, 'savesets', 'substorms.idl'))
 # Get all times that are in dipolarization
 substorm_times = numpy.array([
     datetime.datetime(substorm_data['goes_yyyy'][i], substorm_data['goes_mm'][i], substorm_data['goes_dd'][i])
@@ -431,8 +478,7 @@ print(numpy.sum(idx))  # number of dipolarizations
 substorm_times = substorm_times[idx]
 ```
 
-Association Analysis
-------------------------------
+## Association Analysis
 We now have four lists of times: times when Polar was in the cusp, when Polar observed CEPs, dipolarization onsets, and storm onsets. We wish to know if there are any associations between these events which may imply causality, e.g., are energetic particles more likely to be observed after substorm onsets? This technique is described in detail in [Niehof and Morley, 2012](https://doi.org/10.2172/1035497) and implemented in the [PoPPy module](https://spacepy.github.io/poppy.html).
 
 Consider two different series of events, each event occurring at a particular time. This might be, for instance, CEP observations and dipolarization onsets. Call these series A and series B, consisting of individual events e.g. a<sub>0</sub>, a<sub>1</sub>; b<sub>0</sub> etc. We could ask how many events in series B occur *at the same time* as events in series A. More reasonably, we might expect events that are most-or-less simultaneous to occur within a certain half-window, *h*, of each other. So in the example figure below, two events in series B occur within the half-window of a<sub>0</sub>, and we say the 0th association for series A is 2. Summing over all associations for a series gives the *association number*. Note that, after this summing, the result is symmetric. A higher association number indicates series that are more strongly associated.
@@ -466,6 +512,7 @@ Use a very small number of surrogates (e.g., 10). Use a different CI range (e.g.
 
 ```python
 # Build 95% confidence interval with 100 surrogates
+# TRY: change confidence interval from 95, n_boots to more/fewer surrogates
 pop.aa_ci(95, n_boots=100)
 pop.plot(norm=False, xlabel='Time lag (hours)', ylabel='Association number', xscale=3600.)
 ```
@@ -485,6 +532,7 @@ There are definitely some similarities. So the point of interest is whether ener
 Plot without normalization, to see the separate cusp and CEP associations.
 
 ```python
+# TRY: also use norm=False to see separate associations
 spacepy.poppy.plot_two_ppro(pop, pop_cusp, norm=True, xscale=3600, dpi=150)
 ```
 
