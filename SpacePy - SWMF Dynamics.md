@@ -5,7 +5,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.14.4
+      jupytext_version: 1.14.6
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -17,9 +17,7 @@ jupyter:
 
 ## Tutorial Information & Accompanying Video
 
-This tutorial was created for the Python in Heliophysics Community (PyHC) 2022 Summer School.
-[Video of the original tutorial can be found here.](https://www.youtube.com/live/vHlOI6JAZ7A?feature=share)
-Commands relevant to the PyHC Summer School Conda environment have been commented out.
+This tutorial was created for the [Python in Heliophysics Community (PyHC) 2022 Summer School](https://heliopython.org/summer-school). [Video of the original tutorial can be found here.](https://youtu.be/vHlOI6JAZ7A?t=19533) Commands relevant to the PyHC Summer School environment are commented out and in separate cells.
 
 Ensure that Spacepy is properly installed before running this Jupyter notebook.
 
@@ -47,17 +45,36 @@ Concepts explored in this tutorial include,
 
 <!-- #endregion -->
 
-## Setup
+## Setup (Summer School Only)
+Follow these instructions if you are following along with the tutorial in the 2024 PyHC summer school; otherwise skip down.
 
-As is the case for the other Spacepy tutorials, we use a single directory containing all the data for this tutorial. This data is available via the above DOI. Next, we create a variable to point to that directory- you will need to customize this to correspond to the locaction of the data on your machine.
+As is the case for the other Spacepy tutorials, we use a single directory containing all the data for this tutorial. We create a variable to point to that directory.
 
 ```python
-tutorial_data = '/home/dwelling/pybats_demo/'  #All data for this tutorial, will be used throughout.
-
-# Next two commands are for the PyHC environment use case.
+# Only use this if participating in the summer school!
+#tutorial_data = '/shared/jtniehof/spacepy_tutorial/'  #All data for this tutorial, will be used throughout.
 #import os
-# os.environ['SPACEPY'] = tutorial_data  # No longer necessary for non-PyHC use.
+#os.environ['SPACEPY'] = tutorial_data
 ```
+
+## Setup (Not Summer School)
+Follow these instructions if you are running this notebook on your own, outside of the summer school environment. If you are in the summer school, skip this section.
+
+The first thing we need to do is install SpacePy. If SpacePy is already installed, you can remove that line.
+
+As is the case for the other Spacepy tutorials, we use a single directory containing all the data for this tutorial. This data is available [from Zenodo](https://doi.org/10.5281/zenodo.7693203). Untar it and update the `tutorial_data` variable. Next, we create a variable to point to that directory - you will need to customize this to correspond to the locaction of the data on your machine.
+
+```python
+# Only use this if NOT participating in the summer school!
+!pip install spacepy
+
+import os.path
+# Update this line to point to the directory where you put the tutorial data; it will be used throughout
+# This directory should contain swmf_ssi_north, swmf_ssi_south, etc.
+tutorial_data = os.path.expanduser('~/spacepy_tutorial/')
+```
+
+## Setup
 
 Next, import the pertinent modules that will support this tutorial.
 
@@ -472,7 +489,3 @@ fig.tight_layout()
 In this tutorial, we had worked through a crash-course on using Pybats to explore output from the SWMF, create illustrative figures, and extract values to create quantitative comparisons. There's much, much more however - including automatic data fetching, advanced stream tracing, and many, many classes to handle a variety of outputs. I recommend perusing Pybats and its submodules with IPython's tab-complete capabilities and reading the docstrings.
 
 Overall, much of the capability here is built on Spacepy's `datamodel` package. If you can use that, you can navigate SWMF output without much confusion.
-
-```python
-
-```
