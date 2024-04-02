@@ -82,6 +82,9 @@ Next, import the pertinent modules that will support this tutorial.
 # Import cpickle library:
 import pickle
 
+# Import file path handling:
+import os.path
+
 # Import numpy:
 import numpy as np
 
@@ -120,14 +123,14 @@ Each of these has its own format type, either binary (as in the case with the `.
 
 ```python
 # Some convenience variables to help us keep organized:
-path_north = tutorial_data + 'swmf_ssi_north/'
-path_south = tutorial_data + 'swmf_ssi_south/'
+path_north = os.path.join(tutorial_data, 'swmf_ssi_north')
+path_south = os.path.join(tutorial_data, 'swmf_ssi_south')
 
 # Open the log file:
-log = pybats.LogFile(path_north + 'GM/log_e20150321-054500.log')
+log = pybats.LogFile(os.path.join(path_north, 'GM', 'log_e20150321-054500.log'))
 
 # Open the 2D slice files:
-mhd = pybats.IdlFile(path_north + 'GM/y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs')
+mhd = pybats.IdlFile(os.path.join(path_north, 'GM', 'y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs'))
 ```
 
 *Note: When writing scripts, I often just use the glob module to avoid looking up every precise file name.*
@@ -201,7 +204,7 @@ Our MHD data is from BATS-R-US, meaning we should turn to the *model-specific su
 
 ```python
 # Re-open our MHD file as a Bats2d object.
-mhd = bats.Bats2d(path_north + 'GM/y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs')
+mhd = bats.Bats2d(os.path.join(path_north, 'GM', 'y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs'))
 mhd.calc_b() # Calculate the total magnetic field and unit vector
 
 mhd['bx_hat']
@@ -210,7 +213,7 @@ mhd['bx_hat']
 Similarly, code-specific modules allow us to read our ionosphere output:
 
 ```python
-iono = rim.Iono(path_north + 'IE/it150321_060040_000.idl.gz')
+iono = rim.Iono(os.path.join(path_north, 'IE', 'it150321_060040_000.idl.gz'))
 iono.tree(attrs=True)
 ```
 
@@ -282,8 +285,8 @@ kwargs = {'xlim':[-25,15], 'ylim':[0,20], 'dolog':True}
 # Open the MHD data files, which contain the epochs we wish to plot.
 # Note that we assume both files have the same number of frames at the exact times. This is
 # not always a safe assumption!
-mhd_north = bats.Bats2d(path_north + 'GM/y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs')
-mhd_south = bats.Bats2d(path_south + 'GM/y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs')
+mhd_north = bats.Bats2d(os.path.join(path_north, 'GM', 'y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs'))
+mhd_south = bats.Bats2d(os.path.join(path_south, 'GM', 'y=0_mhd_1_e20150321-060040-000_20150321-060510-000.outs'))
 
 # Save time of first frame:
 t_start = mhd_north.attrs['time']
@@ -310,8 +313,8 @@ for i in range(mhd_north.attrs['nframe']):
     # datetime objects, using f-strings, and being aware of the power of 
     # the string formatting mini-language. Alternativel, the glob module is
     # helpful.
-    iono_north = rim.Iono(path_north + f"IE/it{t_now:%y%m%d_%H%M%S}_000.idl.gz")
-    iono_south = rim.Iono(path_south + f"IE/it{t_now:%y%m%d_%H%M%S}_000.idl.gz")
+    iono_north = rim.Iono(os.path.join(path_north, "IE", f"it{t_now:%y%m%d_%H%M%S}_000.idl.gz"))
+    iono_south = rim.Iono(os.path.join(path_south, "IE", f"it{t_now:%y%m%d_%H%M%S}_000.idl.gz"))
         
     # Get plot ranges for IE plots - absolute maximum from BOTH simulations.
     maxz = max( np.abs(iono_north['n_jr']).max(), np.abs(iono_south['n_jr']).max())
@@ -442,14 +445,14 @@ Our magnetopause shows up clearly, and our simple algorithm works! If we did thi
 
 ```python
 # Open up stand-off info from our python pickle
-with open(tutorial_data + 'standoff_trace_NS.pkl', 'rb') as f:
+with open(os.path.join(tutorial_data, 'standoff_trace_NS.pkl'), 'rb') as f:
     L1 = pickle.load(f)
     L2 = pickle.load(f)
     t = pickle.load(f)
     
 # Open both BATS-R-US log files:
-logN = pybats.LogFile(path_north + 'GM/log_e20150321-054500.log')
-logS = pybats.LogFile(path_south + 'GM/log_e20150321-054500.log')
+logN = pybats.LogFile(os.path.join(path_north, 'GM', 'log_e20150321-054500.log'))
+logS = pybats.LogFile(os.path.join(path_south, 'GM', 'log_e20150321-054500.log'))
 
 # Create our figure of appropriate size:
 fig=plt.figure(figsize=[8,8])
