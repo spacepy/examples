@@ -5,7 +5,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.13.8
+      jupytext_version: 1.14.6
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -29,58 +29,31 @@ It illustrates several areas of functionality in SpacePy and the broader scienti
   - Classes and inheritance
 
 ### Setup
-This tutorial uses geomagnetic index and leapsecond data that SpacePy normally maintains on a per-user basis. (To download this data on your own installation of SpacePy, use `toolbox.update()`).
+This tutorial uses geomagnetic index and leapsecond data that SpacePy normally maintains on a per-user basis. (To download this data on your own installation of SpacePy, use [toolbox.update()](https://spacepy.github.io/autosummary/spacepy.toolbox.update.html#spacepy.toolbox.update)).
 
-For the Python in Heliophysics summer school, we have provided a shared directory with the normal SpacePy configuration and managed data. There are also other data files specific to the summer school so that data downloads don't need to be run. So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to point SpacePy at this directory before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this, and if you're not using this notebook in the summer school then skip the next cell and run the code to download the data.
+For the Python in Heliophysics summer school, we have provided a shared directory with the normal SpacePy configuration and managed data. There are also other data files specific to the summer school so that data downloads don't need to be run. So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to point SpacePy at this directory before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this, and we distinguish between these situations using the next cell.
 
 ```python
-# Are you running this notebook as part of the PyHC summer school?
-# Are you using the HelioCloud service?
+# Are you running this notebook in the PyHC summer school environment?
 # If yes, make sure this variable is set to `True`
 # If no, make sure it's set to `False`
-is_pyhc = True
+is_pyhc = False
 ```
 
 ```python
 import os
-import packaging.version as pav
 import matplotlib
 if is_pyhc:
     tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for Python in Heliophysics summer school
     os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
 else:
-    tutorial_data = os.path.abspath('.')  # If not using HelioCloud, feel free to point this to wherever you want data to go.
+    tutorial_data = os.path.expanduser('~/spacepy_tutorial')  # Point this to wherever you want data to go.
     gps_path = os.path.join(tutorial_data, 'gps')
     if not os.path.isdir(gps_path):
         os.mkdir(gps_path)
-
-# In the PyHC summer school we're using release 0.3.0 of spacepy and 3.5.2 of matplotlib
-# Part of the matplotlib API changed in version 3.5 that breaks the plot method in Spectrogram
-# for log-scaled data. This is fixed in the repository, but won't be present for pip installed
-# packages until the next release.
-# So if your spacepy is newer than release 0.3, or your matplotlib is older than 3.5, you don't
-# need the patch below!
-mpl_version_check = pav.parse(matplotlib.__version__) >= pav.parse('3.5')
-if mpl_version_check:
-    import numpy as np
-    import matplotlib.axes
-
-    # Patch matplotlib's Axes class.
-    # This restores the old API that matplotlib removed in version 3.5
-    # The next release of spacepy works with the new API.
-    # If you're using an older version of matplotlib, this isn't necessary, but won't hurt.
-    class A(matplotlib.axes.Axes):
-        def pcolormesh(self, *args, **kwargs):
-            if 'norm' in kwargs and ('vmax' in kwargs or 'vmin' in kwargs):
-                import matplotlib.colors
-                if isinstance(kwargs['norm'], matplotlib.colors.LogNorm):
-                    kwargs['norm'] = matplotlib.colors.LogNorm(
-                        vmin=kwargs.get('vmin', None),
-                        vmax=kwargs.get('vmax', None))
-                    for k in ('vmin', 'vmax'):
-                        del kwargs[k]
-            return super(A, self).pcolormesh(*args, **kwargs)
-    matplotlib.axes.Axes = A
+    # Update geomagnetic index and leapsecond data
+    import spacepy.toolbox
+    spacepy.toolbox.update(all=True)
 ```
 
 ```python
@@ -104,17 +77,18 @@ splot.style('default')
 
 ### Illustrating geomagnetic shielding using GPS particle data
 
-To illustrate what rigidity is and does, we'll start with some energetic charged particle data from the GPS constellation. If you've already downloaded this data, set `gpsfile` to include the path to your data files. For the PyHC summer school, this data is already in `tutorial_data` as described above. If not, uncomment the `urllib.request` command and the data will download into your working directory (or wherever you set the data location to).
+To illustrate what rigidity is and does, we'll start with some energetic charged particle data from the GPS constellation. For the PyHC summer school, this data is already in `tutorial_data` as described above. If not, the data will download into `tutorial_data`.
 
 ```python
 satnums = [64, 65, 66, 68, 69, 71]
 nsdir = 'https://www.ngdc.noaa.gov/stp/space-weather/satellite-data/satellite-systems/gps/data/ns{}/'
-gpspart = 'ns{}_150621_v1.09.ascii'
+gpspart = 'ns{}_150621_v1.10.ascii'
 gpsfile = os.path.join(tutorial_data, 'gps', gpspart)
-import urllib.request
-for ns in satnums:
-    # req = urllib.request.urlretrieve(''.join([nsdir.format(ns), gpspart.format(ns)]), gpsfile.format(ns))
-    pass
+
+if not is_pyhc:
+    import urllib.request
+    for ns in satnums:
+        req = urllib.request.urlretrieve(''.join([nsdir.format(ns), gpspart.format(ns)]), gpsfile.format(ns))
 ```
 
 This will download one file of charged particle data from each of the satellites listed (ns64, etc.), which have a Combined X-ray Dosimeter (CXD) on board that measures energetic electrons and protons. The data is provided using an ASCII format that is self-describing. Think of it as implementing something like HDF5 or NASA CDF in a text file. The metadata and non-record-varying data are stored in the header to the ASCII file, which is encoded using JSON (JavaScript Object Notation). There's a convience routine to read these in `spacepy.datamodel`.
@@ -129,7 +103,7 @@ This reads the file all-at-once into a `spacepy.datamodel.SpaceData`, which is a
 gps.tree(verbose=True, attrs=True)
 ```
 
-Most commonly we deal with times expressed in UTC, that is, Coordinated Universal Time. UTC is the reference time for everyday life: this notebook is begin written in a timezone that's UTC-6 hours. However, UTC isn't a continuous time scale with a constant number of seconds per day. Sometimes leap seconds are applied, and these aren't known years in advance. So a lot of applications and operational systems will use time scales that don't use leap seconds. Common scales include TAI (International Atomic Time), GPS (Global Positioning System) time, and nanoseconds since the J2000 epoch.
+Most commonly we deal with times expressed in UTC, that is, Coordinated Universal Time. UTC is the reference time for everyday life: this notebook is being written in a timezone that's UTC-6 hours. However, UTC isn't a continuous time scale with a constant number of seconds per day. Sometimes leap seconds are applied, and these aren't known years in advance. So a lot of applications and operational systems will use time scales that don't use leap seconds. Common scales include TAI (International Atomic Time), GPS (Global Positioning System) time, and nanoseconds since the J2000 epoch.
 
 Our GPS particle data file has the time written out in GPS time, so we want to convert that to UTC.
 
@@ -192,7 +166,7 @@ If you are using astropy or sunpy then you may want the time as an `astropy.time
 ```python
 gpastro = ticks_from_gps(gps['year'], gps['decimal_day'], use_astropy=True)
 print(gpastro.iso[0], type(gpastro))
-# For reasons about the become clear, we'll also print the "scale"
+# For reasons about to become clear, we'll also print the "scale"
 print('Our astropy Time object uses the {} scale'.format(gpastro.scale))
 ```
 
@@ -598,8 +572,6 @@ plt.draw()
 rig_vals = ax.get_yticklabels()
 ax2.set_yticklabels(['{:.2f}'.format(Proton.fromRigidity(float(rr.get_text())).energy/1e3) for rr in rig_vals])
 ax2.set_ylabel('Proton Energy [GeV]')
-
-
 ```
 
 At this point, let's undo the SpacePy plot style that we applied. This will take us back to the matplotlib defaults.
