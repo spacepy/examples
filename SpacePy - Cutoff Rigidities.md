@@ -88,7 +88,9 @@ gpsfile = os.path.join(tutorial_data, 'gps', gpspart)
 if not is_pyhc:
     import urllib.request
     for ns in satnums:
-        req = urllib.request.urlretrieve(''.join([nsdir.format(ns), gpspart.format(ns)]), gpsfile.format(ns))
+        outfile = gpsfile.format(ns)
+        if not os.path.exists(outfile):
+            req = urllib.request.urlretrieve(''.join([nsdir.format(ns), gpspart.format(ns)]), outfile)
 ```
 
 This will download one file of charged particle data from each of the satellites listed (ns64, etc.), which have a Combined X-ray Dosimeter (CXD) on board that measures energetic electrons and protons. The data is provided using an ASCII format that is self-describing. Think of it as implementing something like HDF5 or NASA CDF in a text file. The metadata and non-record-varying data are stored in the header to the ASCII file, which is encoded using JSON (JavaScript Object Notation). There's a convience routine to read these in `spacepy.datamodel`.
