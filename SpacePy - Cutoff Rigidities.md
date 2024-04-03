@@ -569,9 +569,12 @@ _ = ax.text(epochs.UTC[ind14p5+10], 14.7, epochs.UTC[ind14p5].year)
 # now let's add the second y-axis
 ax2 = ax.twinx()
 ax2.grid(False)
+ax2.set_ylim(ax.get_ylim())  # match axes
 # so that the tick labels are populated we need to "draw"
 plt.draw()
-rig_vals = ax.get_yticklabels()
+# freeze the ticks so we can label them
+ax2.set_yticks(ax2.get_yticks())
+rig_vals = ax2.get_yticklabels()
 ax2.set_yticklabels(['{:.2f}'.format(Proton.fromRigidity(float(rr.get_text())).energy/1e3) for rr in rig_vals])
 ax2.set_ylabel('Proton Energy [GeV]')
 ```
@@ -596,10 +599,12 @@ ax = plt.gca()
 ax2 = ax.twinx()
 ax2.grid(False)
 ax.set_ylabel('Vert. Cutoff Rigidity @ L=6,7,8 [GV]')
-rig_vals = ax.get_yticklabels()
+ax2.set_ylim(ax.get_ylim())
 plt.draw()
 for idx, lv in enumerate(lvals):
     ax2.plot(epochs.UTC, cutoffs[:, idx], label='L={}'.format(lv))
+ax2.set_yticks(ax2.get_yticks())
+rig_vals = ax2.get_yticklabels()
 ax2.set_yticklabels(['{:.2f}'.format(Proton.fromRigidity(float(rr.get_text())).energy) for rr in rig_vals])
 ax2.set_ylabel('Proton Energy [MeV]')
 ax2.legend()
