@@ -5,7 +5,7 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.13.8
+      jupytext_version: 1.16.1
   kernelspec:
     display_name: Python 3 (ipykernel)
     language: python
@@ -24,18 +24,21 @@ MEC files with a major version number of >=2 (i.e. 2.x.x) give the quaternion to
 *If using the version 1.x.x files the expected vector rotation can be found by taking the conjugates of each quaternion.*
 
 ### Setup
-This tutorial uses leapsecond data that SpacePy normally maintains on a per-user basis. (To download or update this data on your own installation of SpacePy, use toolbox.update()).
+This tutorial uses leapsecond data that SpacePy normally maintains on a per-user basis. (To download or update this data on your own installation of SpacePy, use [toolbox.update()](https://spacepy.github.io/autosummary/spacepy.toolbox.update.html#spacepy.toolbox.update)).
 
-For the Python in Heliophysics summer school, we have provided a shared directory with the normal SpacePy configuration and managed data. There are also other data files specific to the summer school so that data downloads don't need to be run. So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to point SpacePy at this directory before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this, but if you're not using this notebook in the summer school then set `is_pyhc = False` in the next cell before running it.
+For the Python in Heliophysics summer school, we have provided a shared directory with the normal SpacePy configuration and managed data. There are also other data files specific to the summer school so that data downloads don't need to be run. So we use a single directory containing all the data for this tutorial and also the `.spacepy` directory (normally in a user's home directory). We use an environment variable to point SpacePy at this directory before importing SpacePy; although we set the variable in Python, it can also be set outside your Python environment. Most users need never worry about this, and we distinguish between these situations using the next cell.
 
 ```python
 import os
-is_pyhc = True
+# Are you running this notebook in the PyHC summer school environment?
+# If yes, make sure this variable is set to `True`
+# If no, make sure it's set to `False`
+is_pyhc = False
 if is_pyhc:
     tutorial_data = '/shared/jtniehof/spacepy_tutorial'  # All data for Python in Heliophysics summer school
     os.environ['SPACEPY'] = tutorial_data  # Use .spacepy directory inside this directory
 else:
-    tutorial_data = '.'
+    tutorial_data = os.path.expanduser('~/spacepy_tutorial')  # Point this to wherever you want data to go.
 ```
 
 ```python
@@ -61,7 +64,7 @@ data_dir = os.path.join(tutorial_data, 'mms')
 fname = os.path.join(data_dir, dname)
 # make sure the output directory exists first
 if not os.path.isdir(data_dir):
-    os.path.mkdir(data_dir)
+    os.mkdir(data_dir)
 # and then if the files aren't present, download them
 if not os.path.isfile(fname):
     siteurl = 'https://lasp.colorado.edu/mms/sdc/public/files/api/v1/download/science?file='
