@@ -99,6 +99,12 @@ for key, value in mmsdata['mms1_mec_quat_eci_to_gse'].attrs.items():
     print('{0}: {1}'.format(key, value))
 ```
 
+The [plot](https://spacepy.github.io/autosummary/spacepy.datamodel.ISTPContainer.html#spacepy.datamodel.ISTPContainer.plot) method of SpaceData allows for some quick and easy plots of the variables:
+
+```python
+fig = mmsdata.plot(["mms1_mec_kp", "mms1_mec_v_gse"])
+```
+
 ### So how do we use these quaternions?
 The first test is to transform a set of known positions from one coordinate system to another. Here we'll go from GSE to GSM. We note that these values are not calculated with quaternions, but with rotation matrices in LANLGeoMag's CTrans routines. LANLGeoMag is available on github at: https://github.com/drsteve/LANLGeoMag. However, the SpacePy backend for coordinate transformation implements the same approach and calculates the results to the same accuracy with one major caveat: the MMS mission adopted the JPL DE421 model to specify the relative positions of all the bodies in the solar system, and this is how the Earth-Sun vector is derived. In SpacePy, there's currently only one method for calculating the Earth-Sun vector and it's a functional form rather than a fit to data (like the JPL DE models). However, in most cases the differences will be small.
 
