@@ -608,6 +608,7 @@ rig_vals = ax2.get_yticklabels()
 ax2.set_yticklabels(['{:.2f}'.format(Proton.fromRigidity(float(rr.get_text())).energy) for rr in rig_vals])
 ax2.set_ylabel('Proton Energy [MeV]')
 ax2.legend()
+plt.show()
 ```
 
 Finally, let's imagine that a collaborator wants the vertical cutoff rigidity at L=[6, 7, 8], for the full time range we've looked at. But they want data in HDF5. This is mercifully straightforward using `spacepy.datamodel`:
